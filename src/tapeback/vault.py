@@ -4,6 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
+from tapeback.audio import transcode_to_mp3
 from tapeback.recorder import validate_session_name
 from tapeback.settings import Settings
 
@@ -63,9 +64,13 @@ def save_audio_to_vault(
 
     attachments_dir.mkdir(parents=True, exist_ok=True)
 
-    audio_dest = _unique_path(attachments_dir / f"{session_name}.wav")
+    suffix = ".mp3" if settings.audio_format == "mp3" else ".wav"
+    audio_dest = _unique_path(attachments_dir / f"{session_name}{suffix}")
     _ensure_within_vault(audio_dest, settings.vault_path)
-    shutil.copy2(audio_path, audio_dest)
+    if suffix == ".mp3":
+        transcode_to_mp3(audio_path, audio_dest, settings.mp3_bitrate_k)
+    else:
+        shutil.copy2(audio_path, audio_dest)
 
     return audio_dest
 

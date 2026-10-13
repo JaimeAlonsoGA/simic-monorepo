@@ -12,6 +12,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from tapeback.settings import Settings
+
 # Seconds between nvidia-smi samples during a long GPU stage. nvidia-smi costs a
 # process spawn, so this is deliberately coarse — the question it answers ("did the
 # card throttle during this run") does not need fine resolution.
@@ -291,6 +293,11 @@ class _GpuSampler:
             max_vram_mib=max(self._vram),
             throttled_samples=self._throttled,
         )
+
+
+def telemetry_enabled(settings: Settings) -> bool:
+    """GPU sampling is only meaningful for a run that actually asked for the GPU."""
+    return settings.gpu_telemetry and settings.device == "cuda"
 
 
 @contextmanager

@@ -10,12 +10,27 @@ FILE_STEREO = "stereo.wav"
 FILE_MONO_16K = "mono_16k.wav"
 FILE_MIC_16K = "mic_16k.wav"
 FILE_MONITOR_16K = "monitor_16k.wav"
-FILE_MIC = "mic.wav"
-FILE_MONITOR = "monitor.wav"
+# A session records one file per channel, named after it, with the capture format's
+# extension: monitor.mp3, mic.mp3.
+CHANNEL_MONITOR = "monitor"
+CHANNEL_MIC = "mic"
 FILE_SESSION = "session.json"
+# Held (flock) by the process turning a session directory into a note.
+FILE_PROCESSING_LOCK = ".processing.lock"
+# Held (flock), in the state directory, by whichever process is transcribing: one at a time.
+FILE_TRANSCRIBE_LOCK = ".transcribe.lock"
+# What a session processed in the background printed, kept in its directory.
+FILE_PROCESSING_LOG = "processing.log"
 
 # Where in-progress recordings live is not a constant: it depends on settings and
 # XDG_STATE_HOME, and is verified to be private before use. See recorder.session_root().
+
+# Disk one hour of meeting needs until its note exists: two 64 kbps MP3 channels plus
+# the 16 kHz stereo and per-channel copies processing writes (measured: 518 MB).
+BYTES_PER_MEETING_HOUR = 520_000_000
+# Below this much room, `start` and `doctor` warn: meetings run for hours.
+MIN_FREE_MEETING_HOURS = 2
+BYTES_PER_GB = 1_000_000_000
 
 # Sample rates
 SAMPLE_RATE_16K = 16000
@@ -106,7 +121,6 @@ HALLUCINATION_MARKERS = (
 FILE_LIVE_SUFFIX = "_live"
 WAV_HEADER_FALLBACK = 44
 WAV_CHUNK_HEADER_BYTES = 4  # RIFF chunk id / size fields are 4 bytes each
-RESAMPLE_FACTOR = 3  # 48000 / 16000
 
 # API base URLs for LLM providers
 API_BASE_GROQ = "https://api.groq.com/openai/v1"

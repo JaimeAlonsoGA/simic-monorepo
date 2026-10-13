@@ -58,14 +58,15 @@ def find_data_offset(path: Path) -> int:
         return const.WAV_HEADER_FALLBACK
 
 
-def resample_48k_to_16k(pcm_bytes: bytes) -> np.ndarray:
-    """Downsample raw s16le PCM from 48 kHz to 16 kHz.
+def downsample_to_16k(pcm_bytes: bytes, sample_rate: int) -> np.ndarray:
+    """Downsample raw s16le PCM captured at `sample_rate` to 16 kHz.
 
-    Simple decimation by factor 3 (no anti-aliasing filter).
-    Adequate quality for a live preview — the final pipeline uses ffmpeg with loudnorm.
+    Simple decimation (no anti-aliasing filter), so the capture rate must be a multiple
+    of 16 kHz — Settings enforces that for live mode. Adequate quality for a live
+    preview — the final pipeline uses ffmpeg with loudnorm.
     """
     samples = np.frombuffer(pcm_bytes, dtype=np.int16)
-    return samples[:: const.RESAMPLE_FACTOR]
+    return samples[:: sample_rate // const.SAMPLE_RATE_16K]
 
 
 def adjust_timestamps(segments: list[Segment], offset_seconds: float) -> list[Segment]:
@@ -332,7 +333,7 @@ class LiveTranscriber:
         is_mic: bool,
     ) -> list[Segment]:
         """Resample, write temp WAV, transcribe, adjust timestamps, deduplicate."""
-        samples_16k = resample_48k_to_16k(pcm_bytes)
+        samples_16k = downsample_to_16k(pcm_bytes, self._settings.sample_rate)
         if len(samples_16k) == 0:
             return []
 

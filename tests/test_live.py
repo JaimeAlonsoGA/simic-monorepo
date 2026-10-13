@@ -11,8 +11,8 @@ from tapeback.live import (
     LiveTranscriber,
     adjust_timestamps,
     deduplicate_overlap,
+    downsample_to_16k,
     find_data_offset,
-    resample_48k_to_16k,
 )
 from tapeback.models import Segment, Word
 from tapeback.settings import Settings
@@ -74,22 +74,28 @@ def test_find_data_offset_not_riff(tmp_path):
     assert find_data_offset(bad) == 44
 
 
-# --- resample_48k_to_16k ---
+# --- downsample_to_16k ---
 
 
-def test_resample_48k_to_16k_length():
+def test_downsample_48k_to_16k_length():
     """Output length should be input_length / 3."""
     # 4800 samples at 48kHz = 0.1s → 1600 samples at 16kHz
     samples_48k = np.zeros(4800, dtype=np.int16)
-    result = resample_48k_to_16k(samples_48k.tobytes())
+    result = downsample_to_16k(samples_48k.tobytes(), 48000)
     assert len(result) == 1600
 
 
-def test_resample_48k_to_16k_values():
+def test_downsample_48k_to_16k_values():
     """Decimation picks every 3rd sample."""
     samples = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=np.int16)
-    result = resample_48k_to_16k(samples.tobytes())
+    result = downsample_to_16k(samples.tobytes(), 48000)
     np.testing.assert_array_equal(result, [1, 4, 7])
+
+
+def test_downsample_16k_keeps_every_sample():
+    samples = np.array([1, 2, 3], dtype=np.int16)
+    result = downsample_to_16k(samples.tobytes(), 16000)
+    np.testing.assert_array_equal(result, [1, 2, 3])
 
 
 # --- adjust_timestamps ---

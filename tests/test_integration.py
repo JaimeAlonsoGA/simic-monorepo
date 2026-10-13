@@ -7,7 +7,8 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr
 
-from tapeback.audio import get_channel_count, merge_channels, split_channels_16k
+from tapeback._mono import _maybe_diarize_segments
+from tapeback.audio import get_channel_count, is_stereo, merge_channels, split_channels_16k
 from tapeback.channel import (
     classify_segment_by_channel,
     filter_silent_segments,
@@ -20,7 +21,6 @@ from tapeback.diarizer import (
 )
 from tapeback.formatter import TranscriptMeta, format_markdown
 from tapeback.models import DiarizationSegment, Segment
-from tapeback.pipeline import _get_stereo_source, _maybe_diarize_segments
 from tapeback.settings import Settings
 from tapeback.vault import save_markdown_to_vault
 from tests.fixtures import create_mono_wav, create_stereo_wav, create_stereo_wav_segments
@@ -228,7 +228,7 @@ def test_merge_channels_produces_stereo(tmp_path):
     assert len(monitor_raw) > 0
 
 
-# --- get_channel_count + _get_stereo_source ---
+# --- get_channel_count + is_stereo ---
 
 
 def test_get_channel_count_mono_and_stereo(tmp_path):
@@ -244,8 +244,8 @@ def test_get_channel_count_mono_and_stereo(tmp_path):
     assert get_channel_count(stereo) == 2
 
 
-def test_get_stereo_source_detection(tmp_path):
-    """_get_stereo_source: returns path for stereo WAV, None for mono."""
+def test_is_stereo_detection(tmp_path):
+    """is_stereo: True for a stereo WAV, False for mono, a missing file, or not a WAV."""
     mono = tmp_path / "mono.wav"
     stereo = tmp_path / "stereo.wav"
     create_mono_wav(mono, duration=1.0)
@@ -253,10 +253,13 @@ def test_get_stereo_source_detection(tmp_path):
         stereo, duration=1.0, sample_rate=16000, left_amplitude=0.5, right_amplitude=0.5
     )
 
-    assert _get_stereo_source(stereo) == stereo
-    assert _get_stereo_source(mono) is None
-    # Non-existent file returns None (no crash)
-    assert _get_stereo_source(tmp_path / "nonexistent.wav") is None
+    not_wav = tmp_path / "call.mp3"
+    not_wav.write_bytes(b"ID3 not a wav")
+
+    assert is_stereo(stereo) is True
+    assert is_stereo(mono) is False
+    assert is_stereo(tmp_path / "nonexistent.wav") is False
+    assert is_stereo(not_wav) is False
 
 
 # --- Optional diarization ---
@@ -268,7 +271,7 @@ def test_diarization_unavailable_warning(tmp_vault):
     segments = [Segment(start=0.0, end=5.0, text="Hello.")]
     messages: list[str] = []
 
-    with patch("tapeback.pipeline.diarization_available", return_value=False):
+    with patch("tapeback._mono.diarization_available", return_value=False):
         result = _maybe_diarize_segments(
             segments,
             settings,

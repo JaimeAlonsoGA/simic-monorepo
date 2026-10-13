@@ -8,7 +8,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from huggingface_hub.errors import LocalEntryNotFoundError
 
-from tapeback.transcriber import Transcriber, _resolve_compute_type
+from tapeback._device import resolve_compute_type
+from tapeback.transcriber import Transcriber
 
 
 @pytest.mark.parametrize(
@@ -32,7 +33,7 @@ from tapeback.transcriber import Transcriber, _resolve_compute_type
 )
 def test_resolve_compute_type(requested, device, expected):
     """Pure compute-type resolution: explicit passthrough, auto + device branching."""
-    assert _resolve_compute_type(requested, device) == expected
+    assert resolve_compute_type(requested, device) == expected
 
 
 def test_lc_messages_set_for_pyav_locale_workaround():
@@ -117,6 +118,15 @@ def test_load_model_prefers_local_cache(settings):
 
     assert mock_model_cls.call_count == 1
     assert mock_model_cls.call_args_list[0].kwargs["local_files_only"] is True
+
+
+@pytest.mark.parametrize("threads", [0, 6])
+def test_model_decodes_with_the_configured_cpu_threads(settings, threads):
+    settings = settings.model_copy(update={"cpu_threads": threads})
+    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+        Transcriber(settings)
+
+    assert mock_model_cls.call_args.kwargs["cpu_threads"] == threads
 
 
 def test_load_model_downloads_when_not_cached(settings):
@@ -366,9 +376,9 @@ def test_transcribe_reports_progress_through_on_status(settings):
             )
 
     assert messages == [
-        "  transcribe mic: 10% (1:00 / 10:00)",
-        "  transcribe mic: 50% (5:00 / 10:00)",
-        "  transcribe mic: 90% (9:00 / 10:00)",
+        "  transcribe mic: 10% (1:00 / 10:00), about 15 min left",
+        "  transcribe mic: 50% (5:00 / 10:00), about 3 min left",
+        "  transcribe mic: 90% (9:00 / 10:00), less than a minute left",
     ]
 
 

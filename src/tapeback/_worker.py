@@ -29,6 +29,7 @@ WORKER_SETTINGS = (
     "language",
     "device",
     "compute_type",
+    "cpu_threads",
     "beam_size",
     "temperature",
     "batch_size",

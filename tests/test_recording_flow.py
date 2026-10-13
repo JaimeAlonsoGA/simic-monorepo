@@ -12,13 +12,14 @@ so that check lives in tests/regressions/test_stop_reaps_recorders.py.
 """
 
 import os
-import wave
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from tapeback._watch import CaptureWatch, SilenceWatch
 from tapeback.cli import cli
+from tapeback.recorder import processing
 from tests.fixtures import mock_whisper_by_channel, process_state
 
 pytestmark = pytest.mark.usefixtures("cpu_only")
@@ -38,9 +39,12 @@ def _sessions_root() -> Path:
     return Path(os.environ["XDG_STATE_HOME"]) / "tapeback" / "sessions"
 
 
+@pytest.mark.usefixtures("ctrl_c_while_recording")
+@pytest.mark.parametrize("audio_format", ["mp3", "wav"])
 def test_start_then_ctrl_c_records_transcribes_and_cleans_up(
-    runner, vault_env, fake_parecord, ctrl_c_while_recording
+    runner, vault_env, fake_parecord, fake_notify_send, monkeypatch, audio_format
 ):
+    monkeypatch.setenv("TAPEBACK_AUDIO_FORMAT", audio_format)
     with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
         result = runner.invoke(cli, START)
 
@@ -63,21 +67,87 @@ def test_start_then_ctrl_c_records_transcribes_and_cleans_up(
         "[00:00:02] **Other:** Thanks, see you Friday.\n"
     )
 
-    # The audio is in the vault once, as the stereo merge of both channels.
-    assert [p.name for p in (vault_env / "attachments" / "audio").iterdir()] == [f"{SESSION}.wav"]
-    with wave.open(str(vault_env / "attachments" / "audio" / f"{SESSION}.wav"), "rb") as wf:
-        assert (wf.getnchannels(), wf.getframerate(), wf.getnframes()) == (2, 48000, 192000)
+    # The note does not keep a link, and the vault copy is gone.
+    assert "audio:" not in note
+    assert not (vault_env / "attachments").exists()
+
+    # The desktop hears about it: nobody watches a terminal through a long transcription.
+    assert fake_notify_send() == [("Meeting note ready", f"{SESSION}.md")]
 
     # Processed, so nothing is left to recover and nothing is still recording.
     assert list(_sessions_root().iterdir()) == []
     assert not (Path(os.environ["XDG_STATE_HOME"]) / "tapeback" / "session.json").exists()
 
 
-def test_failed_processing_keeps_the_recording_for_recovery(
-    runner, vault_env, fake_parecord, ctrl_c_while_recording
+@pytest.mark.usefixtures("ctrl_c_while_recording")
+def test_start_in_the_background_gives_the_terminal_back_and_recover_makes_the_note(
+    runner, vault_env, fake_parecord, fake_notify_send, monkeypatch
+):
+    """Ctrl+C stops the recording and returns at once; the note is made by
+    `tapeback recover NAME` in a process of its own (tests/test_background.py spawns a
+    real one). Here the spawn is recorded and its command run in-process, where the
+    Whisper fake reaches it."""
+    monkeypatch.setenv("TAPEBACK_BACKGROUND", "true")
+    spawned = []
+    monkeypatch.setattr(
+        "tapeback.cli.process_in_background", lambda session, **flags: spawned.append(flags)
+    )
+
+    result = runner.invoke(cli, START)
+
+    assert result.exit_code == 0, result.output + repr(result.exception)
+    assert spawned == [{"diarize": False, "do_summarize": False}]
+    assert result.stderr.endswith(
+        f"Transcribing {SESSION} in the background. A notification will say when the "
+        "note is ready.\n'tapeback status' shows how far it has got.\n"
+    )
+    assert [process_state(call.pid) for call in fake_parecord()] == [None, None]
+    assert not (vault_env / "meetings").exists()
+    assert sorted(p.name for p in (_sessions_root() / SESSION).iterdir()) == [
+        "mic.mp3",
+        "monitor.mp3",
+    ]
+
+    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+        recovered = runner.invoke(cli, ["recover", SESSION, "--no-diarize", "--no-summarize"])
+
+    assert recovered.exit_code == 0, recovered.output + repr(recovered.exception)
+    assert (
+        (vault_env / "meetings" / f"{SESSION}.md")
+        .read_text()
+        .endswith(
+            "[00:00:00] **You:** I will send the report.\n\n"
+            "[00:00:02] **Other:** Thanks, see you Friday.\n"
+        )
+    )
+    assert fake_notify_send() == [("Meeting note ready", f"{SESSION}.md")]
+    assert list(_sessions_root().iterdir()) == []
+
+
+@pytest.mark.usefixtures("ctrl_c_while_recording")
+def test_start_with_wait_transcribes_in_the_foreground(runner, vault_env, monkeypatch):
+    monkeypatch.setenv("TAPEBACK_BACKGROUND", "true")
+    spawned = []
+    monkeypatch.setattr(
+        "tapeback.cli.process_in_background", lambda session, **flags: spawned.append(flags)
+    )
+
+    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+        result = runner.invoke(cli, [*START, "--wait"])
+
+    assert result.exit_code == 0, result.output + repr(result.exception)
+    assert spawned == []
+    assert "in the background" not in result.stderr
+    assert (vault_env / "meetings" / f"{SESSION}.md").exists()
+    assert list(_sessions_root().iterdir()) == []
+
+
+def test_failed_processing_keeps_the_recording_and_recover_finishes_it(
+    runner, vault_env, fake_parecord, ctrl_c_while_recording, fake_notify_send
 ):
     """Sessions outlive a reboot so that a meeting whose processing failed can still be
-    processed. That promise is only worth something if a failure leaves the audio."""
+    processed. That promise is only worth something if a failure leaves the audio, and
+    one command turns it into the note."""
     model = MagicMock()
     model.transcribe.side_effect = RuntimeError("decoder exploded")
 
@@ -86,16 +156,66 @@ def test_failed_processing_keeps_the_recording_for_recovery(
 
     assert result.exit_code == 1
     assert str(result.exception) == "decoder exploded"
+    assert fake_notify_send() == [
+        (
+            f"{SESSION} was not transcribed",
+            f"decoder exploded\nThe recording is kept: run 'tapeback recover {SESSION}'.",
+        )
+    ]
     session = _sessions_root() / SESSION
-    assert sorted(p.name for p in session.iterdir() if p.name.endswith(".wav")) == [
-        "mic.wav",
+    assert sorted(p.name for p in session.iterdir()) == [
+        ".processing.lock",
+        "mic.mp3",
         "mic_16k.wav",
-        "monitor.wav",
+        "monitor.mp3",
         "monitor_16k.wav",
         "stereo.wav",
     ]
     assert [process_state(call.pid) for call in fake_parecord()] == [None, None]
     assert not (vault_env / "meetings").exists()
+    assert not (vault_env / "attachments").exists()
+
+    status = runner.invoke(cli, ["status"])
+    assert f"Not yet transcribed (run 'tapeback recover'):\n  {SESSION}\n" in status.output
+
+    # While another process turns it into a note, it is neither pending nor recoverable.
+    with processing(session):
+        busy = runner.invoke(cli, ["status"]).output
+        assert f"Being transcribed:\n  {SESSION}\n" in busy
+        assert "Not yet transcribed" not in busy
+        assert runner.invoke(cli, ["recover"]).stderr == "Nothing to recover.\n"
+
+    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+        recovered = runner.invoke(cli, ["recover", "--no-diarize", "--no-summarize"])
+
+    assert recovered.exit_code == 0, recovered.output + repr(recovered.exception)
+    assert (
+        (vault_env / "meetings" / f"{SESSION}.md")
+        .read_text()
+        .endswith(
+            "[00:00:00] **You:** I will send the report.\n\n"
+            "[00:00:02] **Other:** Thanks, see you Friday.\n"
+        )
+    )
+    assert list(_sessions_root().iterdir()) == []
+    assert fake_notify_send()[-1] == ("Meeting note ready", f"{SESSION}.md")
+    assert runner.invoke(cli, ["recover"]).stderr == "Nothing to recover.\n"
+
+
+@pytest.mark.usefixtures("ctrl_c_while_recording")
+def test_kept_audio_lands_in_the_vault_and_the_note_links_it(
+    runner, vault_env, fake_parecord, monkeypatch
+):
+    monkeypatch.setenv("TAPEBACK_KEEP_AUDIO", "true")
+
+    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+        result = runner.invoke(cli, START)
+
+    assert result.exit_code == 0, result.output + repr(result.exception)
+    note = (vault_env / "meetings" / f"{SESSION}.md").read_text()
+    assert f'audio: "[[attachments/audio/{SESSION}.mp3]]"\n' in note
+    assert [p.name for p in (vault_env / "attachments" / "audio").iterdir()] == [f"{SESSION}.mp3"]
+    assert list(_sessions_root().iterdir()) == []
 
 
 @pytest.mark.usefixtures("ctrl_c_while_recording")
@@ -125,3 +245,39 @@ def test_start_records_only_into_a_directory_no_one_else_can_reach(
         )
         assert fake_parecord() == []
         assert list(chosen.iterdir()) == []
+
+
+@pytest.mark.usefixtures("ctrl_c_while_recording")
+def test_start_warns_when_a_channel_is_not_being_written(
+    runner, vault_env, fake_parecord, monkeypatch
+):
+    """The fake recorders write their audio at once and then nothing more: with the
+    threshold at zero, both channels read as stalled at the first look."""
+    monkeypatch.setattr(
+        "tapeback.cli.CaptureWatch",
+        lambda files: CaptureWatch(files, stall_seconds=0.0),
+    )
+
+    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+        result = runner.invoke(cli, START)
+
+    assert result.exit_code == 0, result.output + repr(result.exception)
+    for channel in ("monitor", "mic"):
+        assert result.stderr.count(f"nothing has been written to the {channel} channel") == 1
+
+
+@pytest.mark.usefixtures("ctrl_c_while_recording")
+def test_start_warns_when_the_other_side_is_silent(runner, vault_env, fake_parecord, monkeypatch):
+    """Checked at every look and silent from the first: the warning comes once."""
+    monkeypatch.setattr(
+        "tapeback.cli.SilenceWatch",
+        lambda files: SilenceWatch(
+            files, measure=lambda _p, _w: -91.0, check_every=0.0, silent_after=0.0
+        ),
+    )
+
+    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+        result = runner.invoke(cli, START)
+
+    assert result.exit_code == 0, result.output + repr(result.exception)
+    assert result.stderr.count("Warning: no sound from the other side for 0 min.") == 1

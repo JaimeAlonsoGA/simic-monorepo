@@ -28,13 +28,13 @@ def test_settings_whisper_model_env_deprecated(monkeypatch, vault_env):
 
 
 def test_settings_vault_path_default(monkeypatch, tmp_path):
-    """vault_path should default to ~/tapeback when not set."""
+    """vault_path should default to ~/code/obsidian when not set."""
     monkeypatch.delenv("TAPEBACK_VAULT_PATH", raising=False)
     # Use empty dir so no .env is found
     monkeypatch.chdir(tmp_path)
 
     s = Settings(_env_file=str(tmp_path / "nonexistent.env"))  # type: ignore
-    assert s.vault_path == Path.home() / "tapeback"
+    assert s.vault_path == Path.home() / "code" / "obsidian"
 
 
 def test_settings_defaults(tmp_vault):
@@ -49,14 +49,17 @@ def test_settings_defaults(tmp_vault):
     assert s.stt_heartbeat_seconds == 15.0
     assert s.stt_ffmpeg_timeout == 120.0
     assert s.language == "auto"
-    assert s.device == "cuda"
+    assert s.device == "cpu"
     assert s.compute_type == "auto"
     assert s.beam_size == 4
     assert s.temperature == (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
     assert s.vad_filter is True
     assert s.monitor_source == "auto"
     assert s.mic_source == "auto"
-    assert s.sample_rate == 48000
+    assert s.sample_rate == 16000
+    assert s.audio_format == "mp3"
+    assert s.mp3_bitrate_k == 64
+    assert s.keep_audio is False
     assert s.meetings_dir == "meetings"
     assert s.attachments_dir == "attachments/audio"
     assert s.diarize is True
@@ -158,6 +161,33 @@ def test_live_min_chunk_gt_interval_rejected(tmp_vault):
     """live_min_chunk > live_interval would starve the live transcription loop."""
     with pytest.raises(ValidationError, match="live_min_chunk"):
         Settings(vault_path=tmp_vault, live=True, live_interval=10, live_min_chunk=30.0)
+
+
+@pytest.mark.parametrize("sample_rate", [16000, 32000, 48000])
+def test_live_accepts_a_capture_rate_that_decimates_to_16k(tmp_vault, sample_rate):
+    s = Settings(vault_path=tmp_vault, live=True, sample_rate=sample_rate)
+    assert s.sample_rate == sample_rate
+
+
+def test_live_rejects_a_capture_rate_that_does_not_decimate_to_16k(tmp_vault):
+    with pytest.raises(ValidationError, match=r"sample_rate \(44100\) must be a multiple"):
+        Settings(vault_path=tmp_vault, live=True, sample_rate=44100)
+
+
+def test_capture_rate_is_free_without_live(tmp_vault):
+    s = Settings(vault_path=tmp_vault, live=False, sample_rate=44100)
+    assert s.sample_rate == 44100
+
+
+@pytest.mark.parametrize("bitrate", [16, 160])
+def test_mp3_bitrate_bounds_accepted(tmp_vault, bitrate):
+    assert Settings(vault_path=tmp_vault, mp3_bitrate_k=bitrate).mp3_bitrate_k == bitrate
+
+
+@pytest.mark.parametrize("bitrate", [15, 161])
+def test_mp3_bitrate_outside_bounds_rejected(tmp_vault, bitrate):
+    with pytest.raises(ValidationError):
+        Settings(vault_path=tmp_vault, mp3_bitrate_k=bitrate)
 
 
 def test_live_min_chunk_gt_interval_allowed_when_live_disabled(tmp_vault):

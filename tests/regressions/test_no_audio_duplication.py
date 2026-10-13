@@ -13,7 +13,7 @@ def test_reprocessing_a_vault_file_does_not_duplicate_it(tmp_path):
     2.2 GB of the 5.5 GB audio directory, in raw 48 kHz stereo at ~11 MB per minute.
     """
     vault = tmp_path / "vault"
-    settings = Settings(vault_path=vault)
+    settings = Settings(vault_path=vault, audio_format="wav")
     attachments = vault / settings.attachments_dir
     attachments.mkdir(parents=True)
 
@@ -28,7 +28,7 @@ def test_reprocessing_a_vault_file_does_not_duplicate_it(tmp_path):
 
 def test_a_file_from_outside_the_vault_is_still_copied(tmp_path):
     vault = tmp_path / "vault"
-    settings = Settings(vault_path=vault)
+    settings = Settings(vault_path=vault, audio_format="wav")
     source = tmp_path / "elsewhere.wav"
     source.write_bytes(b"recorded into a temp dir")
 
@@ -41,7 +41,7 @@ def test_a_file_from_outside_the_vault_is_still_copied(tmp_path):
 def test_a_different_recording_with_a_taken_name_still_gets_a_suffix(tmp_path):
     """The no-overwrite guarantee must survive: distinct audio keeps its own file."""
     vault = tmp_path / "vault"
-    settings = Settings(vault_path=vault)
+    settings = Settings(vault_path=vault, audio_format="wav")
     attachments = vault / settings.attachments_dir
     attachments.mkdir(parents=True)
     (attachments / "2026-08-06_12-00-00.wav").write_bytes(b"first recording")

@@ -12,6 +12,7 @@ from tapeback._quality import (
     low_confidence_rate,
     punctuation_per_1000_words,
     strip_hallucinations,
+    word_error_rate,
 )
 
 
@@ -181,3 +182,33 @@ def test_count_recognised_terms_is_case_insensitive():
 
 def test_count_recognised_terms_with_empty_list():
     assert count_recognised_terms("anything", []) == (0, [])
+
+
+# --- word_error_rate ---
+
+
+def test_wer_ignores_case_and_punctuation():
+    assert word_error_rate("Hola, ¿qué tal?", "hola que tal") == pytest.approx(100 / 3)
+
+
+def test_wer_identical_text_is_zero():
+    assert word_error_rate("El presupuesto de 1990.", "el presupuesto de 1990") == 0.0
+
+
+@pytest.mark.parametrize(
+    ("hypothesis", "expected"),
+    [
+        ("a b x d", 25.0),  # one substitution
+        ("a b d", 25.0),  # one deletion
+        ("a b c d e", 25.0),  # one insertion
+        ("", 100.0),  # everything deleted
+        ("x y z w v u", 150.0),  # four substitutions and two insertions
+    ],
+)
+def test_wer_counts_each_kind_of_edit(hypothesis, expected):
+    assert word_error_rate("a b c d", hypothesis) == expected
+
+
+def test_wer_of_an_empty_reference():
+    assert word_error_rate("", "") == 0.0
+    assert word_error_rate("", "hallucinated") == 100.0

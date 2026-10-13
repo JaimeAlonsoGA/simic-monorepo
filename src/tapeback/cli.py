@@ -1,13 +1,20 @@
 import shutil
 import subprocess
-import time
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
 import click
 
 from tapeback import const
-from tapeback.recorder import NoActiveRecording, Recorder, detect_devices, session_dir
+from tapeback._background import last_status, process_in_background
+from tapeback._watch import CaptureWatch, SilenceWatch, wait_while_recording
+from tapeback.recorder import (
+    NoActiveRecording,
+    Recorder,
+    detect_devices,
+    session_dir,
+    session_root,
+)
 from tapeback.settings import Settings, get_settings
 
 
@@ -30,6 +37,13 @@ def _echo_remote_stt_notice(settings: Settings, *, live: bool = False) -> None:
     click.echo(msg, err=True)
 
 
+_WAIT_OPTION = click.option(
+    "--wait",
+    is_flag=True,
+    help="Transcribe in the foreground once stopped (overrides TAPEBACK_BACKGROUND)",
+)
+
+
 @click.group()
 @click.version_option(_pkg_version("tapeback"), prog_name="tapeback")
 def cli() -> None:
@@ -43,7 +57,9 @@ def cli() -> None:
 
     \b
     Quick start:
-      tapeback start          # record (Ctrl+C to stop)
+      tapeback doctor         # check that a meeting can be recorded
+      tapeback start          # record (Ctrl+C to stop and transcribe)
+      tapeback status         # what is recording and being transcribed
       tapeback process a.mp3  # transcribe existing file
 
     \b
@@ -60,12 +76,17 @@ def cli() -> None:
 @click.option(
     "--no-live", is_flag=True, help="Disable live transcription (overrides TAPEBACK_LIVE)"
 )
-def start(name: str | None, no_diarize: bool, no_summarize: bool, no_live: bool) -> None:
+@_WAIT_OPTION
+def start(
+    name: str | None, no_diarize: bool, no_summarize: bool, no_live: bool, wait: bool
+) -> None:
     """Start recording monitor source + microphone.
 
-    Records system audio (what you hear) and microphone (what you say)
-    into a stereo WAV file. Runs in foreground — press Ctrl+C to stop,
-    transcribe, and save to vault.
+    Records system audio (what you hear) and microphone (what you say),
+    one compressed file per channel. Press Ctrl+C (or run 'tapeback stop')
+    to stop: the recording is then transcribed in the background and the
+    note saved to the vault, with a desktop notification when it is ready.
+    'tapeback status' shows the progress; --wait transcribes in the foreground.
 
     \b
     Transcription runs after recording stops. Set TAPEBACK_LIVE=true to also
@@ -79,7 +100,15 @@ def start(name: str | None, no_diarize: bool, no_summarize: bool, no_live: bool)
     """
     settings = get_settings()
 
+    live_active = settings.live and not no_live
+    if live_active and settings.audio_format == "mp3":
+        raise click.ClickException(
+            "Live transcription reads a growing WAV. "
+            "Use --no-live, or set TAPEBACK_AUDIO_FORMAT=wav."
+        )
+
     recorder = Recorder()
+    _warn_if_disk_is_short(settings)
 
     monitor, mic = detect_devices(settings)
     session_name = recorder.start(settings, session_name=name)
@@ -89,13 +118,13 @@ def start(name: str | None, no_diarize: bool, no_summarize: bool, no_live: bool)
     click.echo(f"Monitor: {monitor}", err=True)
     click.echo(f"Mic: {mic}", err=True)
 
+    mic_path = session_path / f"{const.CHANNEL_MIC}.{settings.audio_format}"
+    monitor_path = session_path / f"{const.CHANNEL_MONITOR}.{settings.audio_format}"
+
     live_transcriber = None
-    live_active = settings.live and not no_live
     if live_active:
         from tapeback.live import LiveTranscriber
 
-        mic_path = session_path / const.FILE_MIC
-        monitor_path = session_path / const.FILE_MONITOR
         live_transcriber = LiveTranscriber(settings, session_name, mic_path, monitor_path)
         live_transcriber.start()
         click.echo(f"Live transcript: {live_transcriber.live_md_path}", err=True)
@@ -105,55 +134,109 @@ def start(name: str | None, no_diarize: bool, no_summarize: bool, no_live: bool)
     click.echo("Run 'tapeback stop' to finish and transcribe.", err=True)
     click.echo("Or press Ctrl+C to stop and transcribe now.", err=True)
 
+    interrupted = False
+    watch = CaptureWatch({const.CHANNEL_MONITOR: monitor_path, const.CHANNEL_MIC: mic_path})
     try:
-        while recorder.is_recording():
-            time.sleep(1)
+        wait_while_recording(recorder, watch, SilenceWatch({const.CHANNEL_MONITOR: monitor_path}))
     except KeyboardInterrupt:
-        pass
+        interrupted = True
 
-    # `tapeback stop` from another terminal owns the pipeline and clears the
-    # session; do not call stop_and_process again or start crashes with
-    # "No recording in progress."
-    if not recorder.is_recording():
+    # `tapeback stop` from another terminal claimed the session and owns the pipeline.
+    if not recorder.has_session():
         return
+    stopped = recorder.stopped_channels()
+    if not interrupted and stopped:
+        click.echo(
+            f"\nA recorder stopped on its own ({', '.join(stopped)}). "
+            "Transcribing what was captured.",
+            err=True,
+        )
 
     click.echo("\nStopping...", err=True)
-    try:
-        from tapeback.pipeline import stop_and_process
+    from tapeback.pipeline import stop_recording
 
-        stop_and_process(
-            recorder,
-            settings,
-            live_transcriber=live_transcriber,
-            diarize=not no_diarize,
-            do_summarize=not no_summarize,
-            on_status=_echo_status,
+    try:
+        session = stop_recording(
+            recorder, live_transcriber=live_transcriber, on_status=_echo_status
         )
     except NoActiveRecording:
-        # Peer `tapeback stop` won the race between is_recording() and stop().
+        # Peer `tapeback stop` claimed the session between has_session() and stop().
         return
-    except KeyboardInterrupt:
+    _process_stopped(
+        session,
+        settings,
+        wait=wait,
+        diarize=not no_diarize,
+        do_summarize=not no_summarize,
+    )
+
+
+def _process_stopped(
+    session: Path, settings: Settings, *, wait: bool, diarize: bool, do_summarize: bool
+) -> None:
+    """Turn a stopped recording into a note: here, or in the background."""
+    if wait or not settings.background:
+        from tapeback.pipeline import process_session
+
+        try:
+            process_session(
+                session,
+                settings,
+                diarize=diarize,
+                do_summarize=do_summarize,
+                on_status=_echo_status,
+            )
+        except KeyboardInterrupt:
+            click.echo(
+                f"\nAborted during processing. The recording is kept: "
+                f"run 'tapeback recover {session.name}' to finish it.",
+                err=True,
+            )
+        return
+
+    process_in_background(session, diarize=diarize, do_summarize=do_summarize)
+    announced = " A notification will say when the note is ready." if settings.notify else ""
+    click.echo(
+        f"Transcribing {session.name} in the background.{announced}\n"
+        "'tapeback status' shows how far it has got.",
+        err=True,
+    )
+
+
+def _warn_if_disk_is_short(settings: Settings) -> None:
+    """Say so before the meeting when it may not fit, not when the disk fills."""
+    free = shutil.disk_usage(session_root(settings)).free
+    if free < const.BYTES_PER_MEETING_HOUR * const.MIN_FREE_MEETING_HOURS:
+        minutes = free * 60 // const.BYTES_PER_MEETING_HOUR
         click.echo(
-            f"\nAborted during processing. Audio files kept in {session_path}/",
+            f"Warning: only {free / const.BYTES_PER_GB:.1f} GB free for recordings — about "
+            f"{minutes} minutes of meeting can be recorded and transcribed.",
             err=True,
         )
 
 
 @cli.command()
-def stop() -> None:
+@_WAIT_OPTION
+def stop(wait: bool) -> None:
     """Stop recording from another terminal.
 
-    Sends stop signal to a running 'tapeback start' process,
-    then transcribes and saves the recording to vault.
+    Stops a running 'tapeback start' — or a recording whose 'start' is gone —
+    and transcribes it like Ctrl+C would.
     """
     settings = get_settings()
     recorder = Recorder()
 
+    from tapeback.pipeline import stop_recording
+
+    try:
+        session = stop_recording(recorder, on_status=_echo_status)
+    except NoActiveRecording as exc:
+        hint = ""
+        if recorder.leftover_sessions(settings):
+            hint = " Recordings not yet transcribed are finished with 'tapeback recover'."
+        raise click.ClickException(f"{exc}{hint}") from None
     _echo_remote_stt_notice(settings)
-
-    from tapeback.pipeline import stop_and_process
-
-    stop_and_process(recorder, settings, on_status=_echo_status)
+    _process_stopped(session, settings, wait=wait, diarize=True, do_summarize=True)
 
 
 @cli.command()
@@ -191,6 +274,57 @@ def process(audio_file: str, name: str | None, no_diarize: bool, no_summarize: b
         do_summarize=not no_summarize,
         on_status=_echo_status,
     )
+
+
+@cli.command()
+@click.argument("name", required=False)
+@click.option("--no-diarize", is_flag=True, help="Skip speaker diarization")
+@click.option("--no-summarize", is_flag=True, help="Skip LLM summarization")
+def recover(name: str | None, no_diarize: bool, no_summarize: bool) -> None:
+    """Transcribe recordings whose processing failed or was interrupted.
+
+    A meeting is never thrown away before its note exists: when processing
+    fails, is aborted, or the machine goes down, the recording stays behind.
+    This turns it into a note, then removes it, like a normal stop.
+
+    \b
+    Without NAME, every leftover recording is processed, oldest first.
+    'tapeback status' lists them.
+      tapeback recover
+      tapeback recover 2026-10-12_09-00-00
+    """
+    settings = get_settings()
+    leftovers = Recorder().leftover_sessions(settings)
+    if name is not None:
+        leftovers = [path for path in leftovers if path.name == name]
+        if not leftovers:
+            raise click.ClickException(f"No leftover recording named {name!r}.")
+    if not leftovers:
+        click.echo("Nothing to recover.", err=True)
+        return
+
+    _echo_remote_stt_notice(settings)
+
+    from tapeback.pipeline import process_session
+
+    failed = []
+    for session in leftovers:
+        click.echo(f"Recovering {session.name}...", err=True)
+        try:
+            process_session(
+                session,
+                settings,
+                diarize=not no_diarize,
+                do_summarize=not no_summarize,
+                on_status=_echo_status,
+            )
+        except Exception as exc:
+            # One broken recording must not hold back the others. Its run record has
+            # the traceback; the recording itself stays for another attempt.
+            click.echo(f"Failed to recover {session.name}: {exc}", err=True)
+            failed.append(session.name)
+    if failed:
+        raise click.ClickException(f"Not recovered: {', '.join(failed)}.")
 
 
 @cli.command()
@@ -284,8 +418,23 @@ def status() -> None:
     if session:
         click.echo(f"Recording in progress: {session['session_name']}")
         click.echo(f"Started at: {session['started_at']}")
+    elif recorder.has_session():
+        click.echo("A recording was interrupted. Run 'tapeback stop' to transcribe it.")
     else:
         click.echo("Not recording.")
+
+    in_progress = recorder.sessions_in_progress(settings)
+    if in_progress:
+        click.echo("\nBeing transcribed:")
+        for path in in_progress:
+            progress = last_status(path)
+            click.echo(f"  {path.name}  {progress}" if progress else f"  {path.name}")
+
+    leftovers = recorder.leftover_sessions(settings)
+    if leftovers:
+        click.echo("\nNot yet transcribed (run 'tapeback recover'):")
+        for path in leftovers:
+            click.echo(f"  {path.name}")
 
     click.echo(f"\nVault: {settings.vault_path}")
     click.echo(f"STT backend: {settings.stt_backend}")
@@ -304,6 +453,27 @@ def status() -> None:
         )
         if result.returncode == 0:
             click.echo(result.stdout)
+
+
+_DOCTOR_MARKS = {"ok": "✓", "warn": "!", "fail": "✗"}
+
+
+@cli.command()
+def doctor() -> None:
+    """Check that everything a meeting needs is in place.
+
+    Tools, the sound server and its sources, the vault, disk space for
+    recordings, the Whisper model, and recordings still waiting to be
+    transcribed. Exits 1 when a meeting could not be recorded or saved.
+    """
+    from tapeback._doctor import run_checks
+
+    checks = run_checks(get_settings())
+    width = max(len(check.name) for check in checks)
+    for check in checks:
+        click.echo(f"{_DOCTOR_MARKS[check.outcome]} {check.name:<{width}}  {check.detail}")
+    if any(check.outcome == "fail" for check in checks):
+        raise SystemExit(1)
 
 
 @cli.command()

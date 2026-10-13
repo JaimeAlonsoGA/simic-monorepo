@@ -77,6 +77,24 @@ def test_split_channels_16k(tmp_path):
         assert wf.getframerate() == 16000
 
 
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg required")
+def test_split_channels_16k_keeps_left_as_mic(tmp_path):
+    """The mic speaks on the left and the other side is silent: only mic_16k carries it."""
+    stereo = tmp_path / "stereo.wav"
+    create_stereo_wav(
+        stereo, duration=2.0, sample_rate=16000, left_amplitude=0.5, right_amplitude=0.0
+    )
+
+    mic_16k, monitor_16k = split_channels_16k(stereo, tmp_path / "output")
+
+    def peak(path):
+        with wave.open(str(path), "rb") as wf:
+            return int(np.abs(np.frombuffer(wf.readframes(wf.getnframes()), np.int16)).max())
+
+    assert peak(mic_16k) > 0
+    assert peak(monitor_16k) == 0
+
+
 def test_gate_wav_inactive_silences_listening_region(tmp_path):
     """gate_wav_inactive zeroes the listening half of a 16k mic WAV in place."""
     sr_16k = 16000

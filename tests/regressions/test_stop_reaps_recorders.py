@@ -18,7 +18,8 @@ import subprocess
 import time
 from pathlib import Path
 
-from tapeback.recorder import Recorder, _terminate_process, _wait_and_kill
+from tapeback import _capture
+from tapeback.recorder import Recorder
 from tests.fixtures import process_state
 
 # Bounds a wait for a state the kernel reaches within milliseconds; never asserted on.
@@ -123,8 +124,8 @@ def test_a_recorder_that_ignores_sigterm_is_killed_and_reaped():
         stderr=subprocess.PIPE,
     ).pid
     _wait_for_state(pid, "S")
-    _terminate_process(pid)
+    _capture.terminate(pid)
 
-    _wait_and_kill([pid], timeout=0.2)
+    _capture.wait_and_kill([pid], timeout=0.2)
 
     assert process_state(pid) is None

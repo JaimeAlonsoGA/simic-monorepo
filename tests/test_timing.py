@@ -4,6 +4,7 @@ import pytest
 
 from tapeback._timing import (
     ProgressReporter,
+    format_remaining,
     format_stage_duration,
     format_stage_progress,
     stage_timer,
@@ -69,8 +70,39 @@ def test_progress_reporter_throttles_updates():
 
     # Only the updates at t=11 and t=21 clear the 10s gap.
     assert reported == [
-        "  transcribe mic: 30% (0:30 / 1:40)",
-        "  transcribe mic: 50% (0:50 / 1:40)",
+        "  transcribe mic: 30% (0:30 / 1:40), less than a minute left",
+        "  transcribe mic: 50% (0:50 / 1:40), less than a minute left",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("seconds", "expected"),
+    [
+        (59.9, "less than a minute left"),
+        (60.0, "about 1 min left"),
+        (3569.0, "about 59 min left"),
+        (3570.0, "about 1 h 00 min left"),
+        (4500.0, "about 1 h 15 min left"),
+    ],
+)
+def test_format_remaining(seconds, expected):
+    assert format_remaining(seconds) == expected
+
+
+def test_progress_reporter_estimates_the_rest_from_the_rate_so_far():
+    # Construction at 0; a quarter of an hour of audio done after 5 minutes.
+    ticks = iter([0.0, 300.0, 900.0])
+    reported: list[str] = []
+    reporter = ProgressReporter(
+        "transcribe mic", 3600.0, reported.append, min_interval=0.0, clock=lambda: next(ticks)
+    )
+    reporter.update(900.0)
+    reporter.update(3600.0)
+
+    assert reported == [
+        "  transcribe mic: 25% (15:00 / 1:00:00), about 15 min left",
+        # Done: nothing left to estimate.
+        "  transcribe mic: 100% (1:00:00 / 1:00:00)",
     ]
 
 

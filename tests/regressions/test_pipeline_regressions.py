@@ -6,7 +6,8 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr
 
-from tapeback.pipeline import process_mono_file, process_stereo_file
+from tapeback._mono import process_mono_file
+from tapeback.pipeline import process_stereo_file
 from tapeback.settings import Settings
 from tests.fixtures import (
     create_mono_wav,

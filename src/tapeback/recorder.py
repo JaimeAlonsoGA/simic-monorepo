@@ -1,24 +1,28 @@
 import contextlib
 import datetime
+import fcntl
 import json
 import os
 import re
 import shutil
-import signal
 import stat
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 from zoneinfo import ZoneInfo
 
-from tapeback import const
+from tapeback import _capture, const
 from tapeback.settings import Settings
 
 
 class NoActiveRecording(RuntimeError):
     """Raised when stop() is called with no session in progress."""
+
+
+class SessionBusy(RuntimeError):
+    """Raised when another process is already turning a session into a note."""
 
 
 class SessionData(TypedDict):
@@ -28,6 +32,9 @@ class SessionData(TypedDict):
     monitor_path: str
     mic_path: str
     started_at: str
+    # ffmpeg pids when audio_format is mp3. Absent for a WAV capture.
+    pid_monitor_encode: NotRequired[int]
+    pid_mic_encode: NotRequired[int]
 
 
 _SESSION_NAME_RE = re.compile(r"^[\w-]+$")
@@ -232,66 +239,84 @@ def _utc_now() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)
 
 
-def _process_running(pid: int) -> bool:
-    """Whether a recorder process is still running.
+def _channel_pids(session: SessionData) -> dict[str, list[int]]:
+    """The processes capturing each channel: its recorder, then the encoder behind it
+    when the format is compressed."""
+    pids = {
+        const.CHANNEL_MONITOR: [session["pid_monitor"], session.get("pid_monitor_encode")],
+        const.CHANNEL_MIC: [session["pid_mic"], session.get("pid_mic_encode")],
+    }
+    return {channel: [pid for pid in found if pid is not None] for channel, found in pids.items()}
 
-    kill(pid, 0) alone cannot tell: a process that has exited stays a zombie until its
-    parent reaps it, and kill still succeeds on a zombie. `tapeback start` and the tray
-    spawn parecord themselves and never wait() on it, and `tapeback stop` runs in another
-    process altogether — so a stopped recorder kept reading as alive, and every stop
-    waited out the whole kill timeout before SIGKILLing processes already dead.
+
+def _stopped_channels(session: SessionData) -> list[str]:
+    return [
+        channel
+        for channel, pids in _channel_pids(session).items()
+        if not all(_capture.running(pid) for pid in pids)
+    ]
+
+
+def session_channels(directory: Path) -> tuple[Path, Path]:
+    """(monitor, mic) recorded into a session directory, whatever format captured them."""
+    found = []
+    for channel in (const.CHANNEL_MONITOR, const.CHANNEL_MIC):
+        files = sorted(directory.glob(f"{channel}.*"))
+        if len(files) != 1:
+            raise RuntimeError(f"No {channel} recording in {directory}")
+        found.append(files[0])
+    return found[0], found[1]
+
+
+@contextlib.contextmanager
+def processing(directory: Path) -> Iterator[None]:
+    """Hold a session directory while it becomes a note, or raise SessionBusy.
+
+    Once stopped, a session is no longer named in session.json, so nothing else tells
+    a `tapeback stop` at work apart from a recording whose processing failed: without
+    the lock, `tapeback recover` in another terminal would transcribe it a second time.
+    flock, because the kernel releases it when its holder exits — a crash included.
     """
+    fd = os.open(directory / const.FILE_PROCESSING_LOCK, os.O_CREAT | os.O_RDWR, 0o600)
     try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    if not _is_zombie(pid):
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise SessionBusy(f"{directory.name} is already being processed.") from None
+        yield
+    finally:
+        os.close(fd)
+
+
+@contextlib.contextmanager
+def transcription_turn(on_wait: Callable[[], None]) -> Iterator[None]:
+    """Wait for any other transcription to finish, then hold the turn until this one does.
+
+    Back-to-back meetings processed in the background would otherwise each load a
+    Whisper model at once, and a laptop that fits one runs out of memory with two —
+    the kernel kills both. `on_wait` is called once, only when there is a wait.
+    """
+    # Next to session.json, which is no more private: the lock holds no meeting data.
+    state = _state_dir()
+    state.mkdir(parents=True, exist_ok=True)
+    fd = os.open(state / const.FILE_TRANSCRIBE_LOCK, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            on_wait()
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
+def _being_processed(directory: Path) -> bool:
+    try:
+        with processing(directory):
+            return False
+    except SessionBusy:
         return True
-    # Exited. Reap it if it is ours; another process's zombie is its parent's to collect.
-    _reap(pid, os.WNOHANG)
-    return False
-
-
-def _reap(pid: int, flags: int) -> None:
-    """Collect an exited child of this process, so it does not linger as a zombie.
-    A pid that is not our child raises ChildProcessError, which is the expected case for
-    `tapeback stop` run against another terminal's recording."""
-    with contextlib.suppress(ChildProcessError):
-        os.waitpid(pid, flags)
-
-
-def _is_zombie(pid: int) -> bool:
-    """An exited process another parent has not reaped yet. Reads /proc: Linux only,
-    as tapeback is."""
-    try:
-        stat_line = Path(f"/proc/{pid}/stat").read_text()
-    except OSError:
-        return False
-    # The state follows the command name, which is parenthesised and may hold spaces.
-    return stat_line.rsplit(")", 1)[1].split()[0] == "Z"
-
-
-def _terminate_process(pid: int) -> None:
-    """Send SIGTERM to a single process, ignore if already dead."""
-    with contextlib.suppress(ProcessLookupError):
-        os.kill(pid, signal.SIGTERM)
-
-
-def _wait_and_kill(pids: list[int], timeout: float = 5.0) -> None:
-    """Wait for processes to exit, then SIGKILL survivors."""
-    alive = set(pids)
-    deadline = time.monotonic() + timeout
-
-    while alive and time.monotonic() < deadline:
-        alive = {pid for pid in alive if _process_running(pid)}
-        if alive:
-            time.sleep(0.1)
-
-    for pid in alive:
-        with contextlib.suppress(ProcessLookupError):
-            os.kill(pid, signal.SIGKILL)
-            # SIGKILL cannot be ignored, so waiting for our own child cannot hang.
-            _reap(pid, 0)
 
 
 class Recorder:
@@ -310,11 +335,12 @@ class Recorder:
         return self._session_file
 
     def start(self, settings: Settings, session_name: str | None = None) -> str:
-        """Start two parecord subprocesses for monitor and mic recording.
+        """Start capturing the monitor source and the microphone.
 
-        Creates a private session directory (see `session_root`) holding monitor.wav
-        and mic.wav.
-        Saves state to session.json. Returns session_name.
+        Creates a private session directory (see `session_root`) holding one file per
+        channel in `settings.audio_format`, and saves state to session.json. A session
+        left by a `start` that was killed is stopped first; its audio stays in its
+        directory for `tapeback recover`. Returns session_name.
         """
         if self.is_recording():
             raise RuntimeError(
@@ -323,6 +349,12 @@ class Recorder:
 
         if not shutil.which("parecord"):
             raise RuntimeError("parecord not found. Install: sudo apt install pulseaudio-utils")
+        if settings.audio_format == "mp3" and not shutil.which("ffmpeg"):
+            raise RuntimeError("ffmpeg not found. Install: sudo apt install ffmpeg")
+
+        if self.has_session():
+            with contextlib.suppress(NoActiveRecording):
+                self.stop()
 
         monitor_source, mic_source = detect_devices(settings)
 
@@ -335,87 +367,99 @@ class Recorder:
         tmp_dir = session_dir(settings, session_name)
         _ensure_private_dir(tmp_dir)
 
-        monitor_path = tmp_dir / const.FILE_MONITOR
-        mic_path = tmp_dir / const.FILE_MIC
+        monitor_path = tmp_dir / f"{const.CHANNEL_MONITOR}.{settings.audio_format}"
+        mic_path = tmp_dir / f"{const.CHANNEL_MIC}.{settings.audio_format}"
 
-        base_cmd = [
-            "parecord",
-            "--format=s16le",
-            f"--rate={settings.sample_rate}",
-            "--channels=1",
-            "--file-format=wav",
-        ]
+        monitor_rec, monitor_enc = _capture.spawn(monitor_source, monitor_path, settings, tmp_dir)
+        mic_rec, mic_enc = _capture.spawn(mic_source, mic_path, settings, tmp_dir)
 
-        monitor_proc = subprocess.Popen(
-            [*base_cmd, f"--device={monitor_source}", str(monitor_path)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-
-        mic_proc = subprocess.Popen(
-            [*base_cmd, f"--device={mic_source}", str(mic_path)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-
-        # Save session state
         self._state_dir.mkdir(parents=True, exist_ok=True)
-        session_data = {
-            "pid_monitor": monitor_proc.pid,
-            "pid_mic": mic_proc.pid,
+        session_data: SessionData = {
+            "pid_monitor": monitor_rec,
+            "pid_mic": mic_rec,
             "session_name": session_name,
             "monitor_path": str(monitor_path),
             "mic_path": str(mic_path),
             "started_at": started.isoformat(),
         }
+        if monitor_enc is not None and mic_enc is not None:
+            session_data["pid_monitor_encode"] = monitor_enc
+            session_data["pid_mic_encode"] = mic_enc
         self._session_file.write_text(json.dumps(session_data, indent=2))
 
         return session_name
 
     def stop(self) -> tuple[Path, Path]:
-        """Stop both subprocesses (SIGTERM, then SIGKILL after 5 sec).
+        """Stop the capture and return the (monitor, mic) files it wrote.
 
-        Returns paths to (monitor.wav, mic.wav).
-        Removes session.json.
+        The session is claimed before anything is signalled: unlinking is atomic, so of
+        a `tapeback stop` and a `tapeback start` stopping on Ctrl+C at the same moment,
+        exactly one owns the recording and the other gets NoActiveRecording. Then the
+        recorders get SIGTERM, and the encoders the time to flush once their input ends.
         """
-        if not self._session_file.exists():
+        session = self._read_session()
+        if session is None:
             raise NoActiveRecording("No recording in progress.")
+        try:
+            self._session_file.unlink()
+        except FileNotFoundError:
+            raise NoActiveRecording("No recording in progress.") from None
 
-        session: SessionData = json.loads(self._session_file.read_text())
-        pids = [session["pid_monitor"], session["pid_mic"]]
-
-        # Send SIGTERM to both
-        for pid in pids:
-            _terminate_process(pid)
-
-        # Wait, then force-kill survivors
-        _wait_and_kill(pids)
-
-        self._session_file.unlink()
+        recorders = [session["pid_monitor"], session["pid_mic"]]
+        encoders = [
+            session[key] for key in ("pid_monitor_encode", "pid_mic_encode") if key in session
+        ]
+        for pid in recorders:
+            _capture.terminate(pid)
+        _capture.wait_and_kill(recorders, _capture.RECORDER_STOP_SECONDS)
+        if encoders:
+            _capture.wait_and_kill(encoders, _capture.ENCODER_FLUSH_SECONDS)
 
         return Path(session["monitor_path"]), Path(session["mic_path"])
 
+    def has_session(self) -> bool:
+        """A recording was started and nobody has stopped it yet. Its recorders may
+        have exited on their own: it still holds a meeting to transcribe."""
+        return self._session_file.exists()
+
     def is_recording(self) -> bool:
-        """Check if recording is active (session.json exists and processes are alive)."""
-        if not self._session_file.exists():
-            return False
+        """Every capture process of the session is running.
 
-        try:
-            session: SessionData = json.loads(self._session_file.read_text())
-        except (json.JSONDecodeError, KeyError):
-            return False
+        Only asks. It used to delete the session as soon as one recorder was gone, and
+        `tapeback start` then read the missing session as a peer `tapeback stop` and
+        returned without transcribing anything.
+        """
+        session = self._read_session()
+        return session is not None and not _stopped_channels(session)
 
-        for key in ("pid_monitor", "pid_mic"):
-            if not _process_running(session[key]):
-                # Process is dead — clean up stale session
-                self._session_file.unlink(missing_ok=True)
-                return False
-
-        return True
+    def stopped_channels(self) -> list[str]:
+        """Channels whose capture exited on its own. Empty without a session."""
+        session = self._read_session()
+        return [] if session is None else _stopped_channels(session)
 
     def get_session_info(self) -> SessionData | None:
         """Return session info dict if recording, else None."""
-        if not self.is_recording():
+        return self._read_session() if self.is_recording() else None
+
+    def leftover_sessions(self, settings: Settings) -> list[Path]:
+        """Session directories nothing owns: not recording, not being processed — the
+        meetings whose processing failed or was interrupted. Oldest name first."""
+        session = self._read_session()
+        active = session["session_name"] if session else None
+        root = session_root(settings)
+        return sorted(
+            p for p in root.iterdir() if p.is_dir() and p.name != active and not _being_processed(p)
+        )
+
+    def sessions_in_progress(self, settings: Settings) -> list[Path]:
+        """Session directories some process is turning into a note right now, in the
+        background or not. Oldest name first."""
+        root = session_root(settings)
+        return sorted(p for p in root.iterdir() if p.is_dir() and _being_processed(p))
+
+    def _read_session(self) -> SessionData | None:
+        try:
+            session: SessionData = json.loads(self._session_file.read_text())
+        except (FileNotFoundError, json.JSONDecodeError):
             return None
-        data: SessionData = json.loads(self._session_file.read_text())
-        return data
+        return session

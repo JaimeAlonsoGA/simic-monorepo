@@ -13,14 +13,16 @@ Works with any video call platform: Google Meet, Zoom, Teams, Telegram, Discord,
 
 - **Live transcription** (opt-in): read the transcript while the meeting is still going — Whisper transcribes in the background every 60 seconds (set `TAPEBACK_LIVE=true`)
 - **Platform-agnostic**: captures OS-level audio, works with any app
-- **Local transcription**: faster-whisper on CPU or CUDA GPU (default)
+- **Light recordings, transcript only**: each channel is captured as 64 kbps MP3 — about 60 MB for an hour-long meeting — and deleted once the note is written. `TAPEBACK_KEEP_AUDIO=true` archives it in the vault instead
+- **Nothing lost**: Ctrl+C, a recorder that dies mid-meeting, a failed or interrupted run — the recording stays until a note exists. `tapeback status` lists what is pending, `tapeback recover` finishes it
+- **Local transcription**: faster-whisper on CPU (default) or CUDA GPU
 - **Optional remote STT**: set `TAPEBACK_STT_BACKEND=openai` to use a remote transcription backend instead of local Whisper. OpenAI is the only remote backend today (requires `tapeback[stt]` + `TAPEBACK_STT_API_KEY`; meeting audio leaves the machine). Uploads retry on timeouts/transient errors with status heartbeats; finished chunks are cached so `tapeback process` on the same WAV only re-uploads what is missing.
 - **Speaker diarization**: pyannote identifies who said what
 - **Stereo channel separation**: your mic (left) vs. others (right) for accurate "You" attribution
-- **Obsidian-native output**: Markdown with YAML frontmatter, wikilinks to audio files
+- **Obsidian-native output**: Markdown with YAML frontmatter, a wikilink to the audio when it is kept
 - **LLM summarization**: Anthropic, OpenAI, Groq, Gemini, DeepSeek, OpenRouter, Qwen (with automatic provider fallback)
 - **System tray**: start/stop recording from the tray icon, no terminal needed
-- **CLI-first**: `tapeback start`, Ctrl+C to stop, done
+- **CLI-first**: `tapeback start`, Ctrl+C to stop, done — the terminal is yours again at once; the note is made in the background, one meeting at a time
 
 tapeback is modular — the base package handles recording and transcription.
 Speaker diarization and LLM summaries are optional and installed separately.
@@ -111,10 +113,20 @@ nix run github:yastcher/tapeback#full             # everything
 ## Quick start
 
 ```bash
+tapeback doctor                    # once: is everything a meeting needs in place?
 tapeback start                     # start recording, Ctrl+C to stop
 ```
 
-That's it. The transcript is saved to `~/tapeback/meetings/`.
+That's it. The transcript is saved to `~/code/obsidian/meetings/` and the recording is
+deleted. While it records, the terminal shows how long and how much has been captured
+(`● REC 12:34  monitor 5.8 MB  mic 5.8 MB`), and warns if a channel stops being written,
+if the other side has been silent for three minutes (the call may be playing on an
+output tapeback is not recording), or if the disk cannot hold two hours of meeting.
+Ctrl+C gives the terminal back at once: the meeting is transcribed in the background,
+`tapeback status` shows how much is left (`transcribe mic: 40% (24:00 / 1:00:00), about
+18 min left`), and a desktop notification says when the note is ready — or why not.
+Meetings stopped back to back are transcribed one after the other, never at once.
+`tapeback start --wait` transcribes in the foreground instead.
 
 To save to your Obsidian vault instead:
 
@@ -277,15 +289,18 @@ the tally to stderr, so `--show-masked > sent.txt` gives you something to diff.
 ## CLI reference
 
 ```
-tapeback start [NAME]              Start recording (Ctrl+C to stop)
+tapeback doctor                    Check tools, audio sources, vault, disk and model before a meeting
+tapeback start [NAME]              Start recording (Ctrl+C to stop; transcribed in the background)
 tapeback stop                      Stop recording from another terminal
 tapeback tray                      System tray icon
 tapeback process <FILE> [--name N] Transcribe an existing audio file
+tapeback recover [NAME]            Transcribe recordings whose processing failed or was interrupted
 tapeback summarize <FILE>          Add LLM summary to transcript
-tapeback status                    Show recording status and settings
+tapeback status                    Show what is recording, being transcribed or pending, and settings
 ```
 
 ```bash
+tapeback start --wait              # transcribe in the foreground once stopped (also: tapeback stop --wait)
 tapeback start --no-live           # one-shot override: skip live transcription even if TAPEBACK_LIVE=true
 tapeback start --no-diarize        # skip speaker identification
 tapeback start --no-summarize      # skip LLM summary
@@ -308,7 +323,7 @@ date: 2026-03-23
 time: "14:30"
 duration: "01:23:45"
 language: en
-audio: "[[attachments/audio/2026-03-23_14-30-00.wav]]"
+audio: "[[attachments/audio/2026-03-23_14-30-00.mp3]]"   # only with TAPEBACK_KEEP_AUDIO=true
 tags:
   - meeting
   - transcript
@@ -361,9 +376,9 @@ All settings via environment variables (prefix `TAPEBACK_`) or
 
 | Variable | Default | Description |
 |---|---|---|
-| `TAPEBACK_VAULT_PATH` | `~/tapeback` | Path to output directory (Obsidian vault) |
+| `TAPEBACK_VAULT_PATH` | `~/code/obsidian` | Path to output directory (Obsidian vault) |
 | `TAPEBACK_MEETINGS_DIR` | `meetings` | Subdirectory for meeting notes |
-| `TAPEBACK_ATTACHMENTS_DIR` | `attachments/audio` | Subdirectory for audio files |
+| `TAPEBACK_ATTACHMENTS_DIR` | `attachments/audio` | Subdirectory for audio kept with `TAPEBACK_KEEP_AUDIO` |
 
 ### Transcription
 
@@ -379,7 +394,7 @@ All settings via environment variables (prefix `TAPEBACK_`) or
 | `TAPEBACK_STT_HEARTBEAT_SECONDS` | `15` | While an upload is in flight, emit a status line this often so a long API wait does not look hung |
 | `TAPEBACK_STT_FFMPEG_TIMEOUT` | `120` | Wall-clock timeout for ffmpeg encode/slice used to prepare remote uploads |
 | `TAPEBACK_LANGUAGE` | `auto` | Language code (`auto` for auto-detection, or `en`, `ru`, `fr`, etc.) |
-| `TAPEBACK_DEVICE` | `cuda` | `cuda` or `cpu`. Local backend only |
+| `TAPEBACK_DEVICE` | `cpu` | `cuda` or `cpu`. Local backend only |
 | `TAPEBACK_GPU_TELEMETRY` | `true` | Sample GPU clocks/temperature during transcription and print a one-line summary per stage. Observation only — tapeback never changes clock or power caps. No-op without `nvidia-smi` or on `cpu` |
 | `TAPEBACK_RESUME_CACHE` | `true` | Reuse a channel already transcribed from the same audio with the same output-affecting settings, so an interrupted run does not redo finished work. Changing the model, glossary, language or any decoding setting invalidates it |
 | `TAPEBACK_RESUME_CACHE_DIR` | *(XDG)* | Where reusable channel results go. Default `~/.local/share/tapeback/resume` |
@@ -393,6 +408,7 @@ All settings via environment variables (prefix `TAPEBACK_`) or
 | `TAPEBACK_RUN_LOG_DIR` | *(XDG)* | Where run records go. Default `~/.local/share/tapeback/runs` (honours `XDG_DATA_HOME`). Oldest records are pruned past 200 |
 | `TAPEBACK_COMPUTE_TYPE` | `auto` | `auto`, `int8_float16`, `float16`, `int8`, or `float32`. `auto` → `int8_float16` on CUDA, `int8` on CPU. **`int8_float16` is both faster and smaller than `float16`** — measured on a GTX 1650 Ti with large-v3-turbo: 14.16× vs 3.90× real time, 1115 MiB vs 2139 MiB, with no quality cost. ctranslate2 falls back on its own if your GPU lacks the type |
 | `TAPEBACK_BEAM_SIZE` | `4` | Whisper beam search width (lower = faster, slightly less accurate) |
+| `TAPEBACK_CPU_THREADS` | `0` | Threads Whisper decodes with on the CPU. `0` is faster-whisper's default of 4, whatever the machine has |
 | `TAPEBACK_TEMPERATURE` | `[0.0, 0.2, 0.4, 0.6, 0.8, 1.0]` | Temperature fallback ladder. The high steps break Whisper out of hallucination loops on noisy audio — don't shorten unless your input is clean (shortening can cause repeat loops: slower *and* worse) |
 | `TAPEBACK_BATCH_SIZE` | `0` | Batched inference (faster-whisper `BatchedInferencePipeline`) — processes VAD segments in parallel, several× faster on GPU. `0` = off; try `8`. On small GPUs (≤4 GB) it may OOM even at `4` — use `2`, pair with `TAPEBACK_COMPUTE_TYPE=int8`, or keep `0`. OOM falls back to CPU automatically. **Batching silently ignores `no_speech_threshold`, `condition_on_previous_text` and all but the first `temperature` value** — tapeback warns which ones when you enable it |
 | `TAPEBACK_CHUNK_LENGTH` | `30` | Seconds of audio consumed per decode window. **Do not lower this to fight hallucinations.** Whisper's encoder is fixed at 30 s and every window is zero-padded back to it, so a smaller value does not make a pass cheaper — it only needs more of them. Measured on a 145 s file: `2` → 390.6 s, `7` → 116.8 s, `30` → 41.4 s |
@@ -410,7 +426,7 @@ All settings via environment variables (prefix `TAPEBACK_`) or
 
 | Variable | Default | Description |
 |---|---|---|
-| `TAPEBACK_LIVE` | `false` | Enable live transcription during recording (opt-in; competes with the post-recording pipeline for GPU memory on small cards) |
+| `TAPEBACK_LIVE` | `false` | Enable live transcription during recording (opt-in; competes with the post-recording pipeline for GPU memory on small cards). Reads the growing recording, so it needs `TAPEBACK_AUDIO_FORMAT=wav` and a `TAPEBACK_SAMPLE_RATE` that is a multiple of 16000 |
 | `TAPEBACK_LIVE_INTERVAL` | `60` | Seconds between transcription cycles |
 | `TAPEBACK_LIVE_OVERLAP` | `2.0` | Seconds of overlap between chunks |
 | `TAPEBACK_LIVE_MIN_CHUNK` | `5.0` | Minimum new audio (seconds) to trigger transcription |
@@ -421,8 +437,13 @@ All settings via environment variables (prefix `TAPEBACK_`) or
 |---|---|---|
 | `TAPEBACK_MONITOR_SOURCE` | `auto` | PulseAudio monitor source name |
 | `TAPEBACK_MIC_SOURCE` | `auto` | PulseAudio mic source name |
-| `TAPEBACK_SAMPLE_RATE` | `48000` | Recording sample rate |
-| `TAPEBACK_SESSIONS_DIR` | *(XDG)* | Where recordings in progress live, about 1.6 GB per hour until processed. Default `~/.local/state/tapeback/sessions`. An absolute path: `~` is not expanded. Must be private to you (mode `0700`); tapeback refuses one other users can reach. A session that failed to process stays here, so it can be recovered |
+| `TAPEBACK_SAMPLE_RATE` | `16000` | Recording sample rate. 16 kHz is what Whisper works at; higher only makes the files bigger |
+| `TAPEBACK_AUDIO_FORMAT` | `mp3` | `mp3` (parecord piped into ffmpeg) or `wav` (parecord alone, about 10x bigger; needed for live transcription) |
+| `TAPEBACK_MP3_BITRATE_K` | `64` | MP3 bitrate per channel, 16–160 kbps. 64 is about 29 MB per hour per channel |
+| `TAPEBACK_NOTIFY` | `true` | Desktop notification (`notify-send`) when a note is ready or could not be made |
+| `TAPEBACK_BACKGROUND` | `true` | Once a recording stops, transcribe it in a detached process (`tapeback recover NAME`) and give the terminal back. Its output goes to `processing.log` in the session directory, which `tapeback status` reads. `--wait` on `start`/`stop` overrides it for one run |
+| `TAPEBACK_KEEP_AUDIO` | `false` | Archive the recording in the vault (`TAPEBACK_ATTACHMENTS_DIR`) and link it from the note. Off: the audio is deleted once the note is written |
+| `TAPEBACK_SESSIONS_DIR` | *(XDG)* | Where recordings in progress live: about 60 MB per hour while recording, plus about 460 MB per hour of temporary files while it is processed. Default `~/.local/state/tapeback/sessions`. An absolute path: `~` is not expanded. Must be private to you (mode `0700`); tapeback refuses one other users can reach. A session that failed to process stays here, so it can be recovered |
 | `TAPEBACK_TIMEZONE` | *(system)* | Time zone for naming a recording, and so for the note's file name, date and time. An IANA name such as `Europe/Madrid`, or `UTC`. Unset: the machine's own zone |
 
 ### Speaker diarization
@@ -491,6 +512,15 @@ Lines worth watching:
   `TAPEBACK_GPU_TELEMETRY=false`.
 
 ### A run failed or you interrupted it — what happened?
+
+The recording is still there. A meeting is deleted only once its note exists, so a run
+that fails, an aborted one, or one cut short by a reboot leaves its session behind:
+
+```bash
+tapeback status                    # lists recordings being transcribed and not yet transcribed
+tapeback recover                   # transcribes all of them, oldest first
+tapeback recover 2026-10-12_09-00-00
+```
 
 Every run writes a JSON record to `~/.local/share/tapeback/runs/`:
 
@@ -573,7 +603,7 @@ sudo /opt/tapeback/bin/pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
 ```
 
 They install alongside the CUDA 13 libraries without conflict. No `LD_LIBRARY_PATH`
-needed: when `TAPEBACK_DEVICE=cuda` (the default), tapeback finds and preloads them
+needed: when `TAPEBACK_DEVICE=cuda`, tapeback finds and preloads them
 on startup. If they're not installed, transcription falls back to CPU with the message
 above.
 

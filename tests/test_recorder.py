@@ -95,7 +95,7 @@ def test_stop_sends_sigterm(recorder, session_file):
         if sig == signal.SIGTERM:
             return  # SIGTERM accepted
 
-    with patch("tapeback.recorder.os.kill", side_effect=mock_kill):
+    with patch("tapeback._capture.os.kill", side_effect=mock_kill):
         _monitor_path, _mic_path = recorder.stop()
 
     # SIGTERM sent to both

@@ -211,7 +211,8 @@ class TranscriptMeta:
     """
 
     session_name: str
-    audio_rel_path: str
+    # Vault-relative link to the recording, or None when the audio is not kept.
+    audio_rel_path: str | None
     duration_seconds: float
     language: str
     # True when transcription was interrupted and the note covers only part of the
@@ -250,7 +251,10 @@ def format_markdown(
         f'time: "{time_display}"',
         f'duration: "{duration_hms}"',
         f"language: {meta.language}",
-        f'audio: "[[{meta.audio_rel_path}]]"',
+    ]
+    if meta.audio_rel_path is not None:
+        lines.append(f'audio: "[[{meta.audio_rel_path}]]"')
+    lines += [
         "tags:",
         "  - meeting",
         "  - transcript",

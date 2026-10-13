@@ -23,6 +23,8 @@ Reporter = Callable[[str], None]
 PROGRESS_MIN_INTERVAL_SEC = 10.0
 
 PERCENT = 100.0
+SECONDS_PER_MINUTE = 60
+MINUTES_PER_HOUR = 60
 
 
 def format_stage_duration(stage: str, seconds: float) -> str:
@@ -30,7 +32,7 @@ def format_stage_duration(stage: str, seconds: float) -> str:
     return f"Stage '{stage}' took {seconds:.1f}s"
 
 
-def _format_clock(seconds: float) -> str:
+def format_clock(seconds: float) -> str:
     """Format a position within the audio as M:SS or H:MM:SS."""
     total = int(seconds)
     hours, remainder = divmod(total, 3600)
@@ -40,10 +42,25 @@ def _format_clock(seconds: float) -> str:
     return f"{minutes}:{secs:02d}"
 
 
-def format_stage_progress(stage: str, position: float, total: float) -> str:
-    """One-line progress record: how far into the audio a stage has got."""
+def format_remaining(seconds: float) -> str:
+    """Time left, as precise as an estimate deserves: minutes, never seconds."""
+    if seconds < SECONDS_PER_MINUTE:
+        return "less than a minute left"
+    minutes = round(seconds / SECONDS_PER_MINUTE)
+    if minutes < MINUTES_PER_HOUR:
+        return f"about {minutes} min left"
+    hours, minutes = divmod(minutes, MINUTES_PER_HOUR)
+    return f"about {hours} h {minutes:02d} min left"
+
+
+def format_stage_progress(
+    stage: str, position: float, total: float, remaining: float | None = None
+) -> str:
+    """One-line progress record: how far into the audio a stage has got, and — once
+    there is a rate to go by — how long the rest should take."""
     percent = min(PERCENT, position / total * PERCENT) if total > 0 else 0.0
-    return f"  {stage}: {percent:.0f}% ({_format_clock(position)} / {_format_clock(total)})"
+    line = f"  {stage}: {percent:.0f}% ({format_clock(position)} / {format_clock(total)})"
+    return line if remaining is None else f"{line}, {format_remaining(remaining)}"
 
 
 class ProgressReporter:
@@ -72,7 +89,7 @@ class ProgressReporter:
         # constructed deep inside transcription, so tests can only reach its clock
         # by patching the module attribute.
         self._clock = clock if clock is not None else time.monotonic
-        self._last_report = self._clock()
+        self._started = self._last_report = self._clock()
 
     def update(self, position_seconds: float) -> None:
         """Report progress if enough wall-clock time has passed since the last line."""
@@ -82,7 +99,18 @@ class ProgressReporter:
         if now - self._last_report < self._min_interval:
             return
         self._last_report = now
-        self._report(format_stage_progress(self._stage, position_seconds, self._total))
+        self._report(
+            format_stage_progress(
+                self._stage, position_seconds, self._total, self._remaining(position_seconds, now)
+            )
+        )
+
+    def _remaining(self, position: float, now: float) -> float | None:
+        """The rest of the audio at the rate so far. On CPU an hour-long meeting takes
+        most of an hour, and a percentage alone does not say whether to wait or to go."""
+        if position <= 0 or position >= self._total:
+            return None
+        return (self._total - position) * (now - self._started) / position
 
 
 @contextmanager

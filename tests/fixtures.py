@@ -1,8 +1,11 @@
+import contextlib
 import importlib.util
 import json
 import os
 import shutil
+import signal
 import subprocess
+import sys
 import time
 import wave
 from collections.abc import Sequence
@@ -16,7 +19,7 @@ import pytest
 from click.testing import CliRunner
 from pydantic import SecretStr
 
-from tapeback import cli as cli_module
+from tapeback import _watch
 from tapeback.recorder import Recorder
 from tapeback.settings import Settings
 from tapeback.summarizer import _PROVIDER_ENV_VARS
@@ -99,6 +102,13 @@ def isolate_settings_sources(monkeypatch):
     # spawn a real worker, which loads a real model and ignores the mock entirely.
     # Tests for the isolated path opt back in and mock the subprocess instead.
     monkeypatch.setenv("TAPEBACK_ISOLATE_TRANSCRIPTION", "false")
+    # And for the desktop: a developer's real notify-send would announce every note the
+    # suite writes. Tests of notifications opt back in with a fake notify-send.
+    monkeypatch.setenv("TAPEBACK_NOTIFY", "false")
+    # And for processing: a `start` or `stop` in the background would hand the note to
+    # a real `python -m tapeback` child that none of the test's fakes reach. Tests of
+    # the background path opt back in.
+    monkeypatch.setenv("TAPEBACK_BACKGROUND", "false")
 
 
 @pytest.fixture
@@ -245,21 +255,32 @@ def release_tree(tmp_path):
 # `parecord` as tapeback meets it: called with --device=... and an output path, it writes
 # a WAV there and records until SIGTERM. Each call logs its PID, its device and the mode
 # of the directory it was told to write into — after the audio is in place, so a logged
-# call is a recorder that has captured something. The trap comes first: bash runs it
-# only between commands, so a SIGTERM during the copy still leaves a whole file. The
+# call is a recorder that has captured something. The traps come first: bash runs them
+# only between commands, so a SIGTERM during the copy still leaves a whole file. Each
+# logs the signal that stopped the recorder, as real parecord exits on either. The
 # loop rather than one long `sleep`, which as a background job would outlive the script.
 _FAKE_PARECORD = """#!/usr/bin/env bash
-trap 'exit 0' TERM
-device="" out=""
+trap 'echo "$$ TERM" >> "$FAKE_PARECORD_LOG.stops"; exit 0' TERM
+trap 'echo "$$ INT" >> "$FAKE_PARECORD_LOG.stops"; exit 130' INT
+device="" out="" rate=48000 raw=0
 for arg in "$@"; do
   case "$arg" in
     --device=*) device="${arg#--device=}" ;;
+    --rate=*) rate="${arg#--rate=}" ;;
+    --raw) raw=1 ;;
     -*) ;;
     *) out="$arg" ;;
   esac
 done
-cp "$FAKE_PARECORD_AUDIO/$device.wav" "$out"
-printf '%s %s %s\\n' "$$" "$device" "$(stat -c %a "$(dirname "$out")")" >> "$FAKE_PARECORD_LOG"
+src="$FAKE_PARECORD_AUDIO/$device.wav"
+if [ "$raw" = 1 ]; then
+  ffmpeg -v error -i "$src" -f s16le -ar "$rate" -ac 1 pipe:1
+  dir="$(pwd)"
+else
+  cp "$src" "$out"
+  dir="$(dirname "$out")"
+fi
+printf '%s %s %s\\n' "$$" "$device" "$(stat -c %a "$dir")" >> "$FAKE_PARECORD_LOG"
 while :; do sleep 0.05; done
 """
 
@@ -269,6 +290,8 @@ class ParecordCall:
     pid: int
     device: str
     dir_mode: str
+    # The signal that stopped it ("TERM", "INT"); None while it runs or when SIGKILLed.
+    stopped_by: str | None
 
 
 @pytest.fixture
@@ -293,14 +316,52 @@ def fake_parecord(tmp_path, monkeypatch):
     monkeypatch.setenv("TAPEBACK_MONITOR_SOURCE", "fake.monitor")
     monkeypatch.setenv("TAPEBACK_MIC_SOURCE", "fake.mic")
 
+    stops = Path(f"{log}.stops")
+
     def calls() -> list[ParecordCall]:
         lines = log.read_text().splitlines() if log.exists() else []
+        stop_lines = stops.read_text().splitlines() if stops.exists() else []
+        stopped = dict(line.split() for line in stop_lines)
         return [
-            ParecordCall(int(pid), device, mode)
+            ParecordCall(int(pid), device, mode, stopped.get(pid))
             for pid, device, mode in (line.split() for line in lines)
         ]
 
     return calls
+
+
+# `notify-send` as a desktop has it: each call appends its arguments, one per line,
+# then a separator — a body may itself span lines.
+_FAKE_NOTIFY_SEND = """#!/usr/bin/env bash
+printf '%s\\n' "$@" >> "$FAKE_NOTIFY_LOG"
+echo '---' >> "$FAKE_NOTIFY_LOG"
+"""
+
+
+@pytest.fixture
+def fake_notify_send(tmp_path, monkeypatch):
+    """Notifications on, delivered to a fake notify-send. Returns a callable listing
+    them as (title, body)."""
+    bin_dir = tmp_path / "notify-bin"
+    bin_dir.mkdir()
+    script = bin_dir / "notify-send"
+    script.write_text(_FAKE_NOTIFY_SEND)
+    script.chmod(0o755)
+    log = tmp_path / "notify.log"
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    monkeypatch.setenv("FAKE_NOTIFY_LOG", str(log))
+    monkeypatch.setenv("TAPEBACK_NOTIFY", "true")
+
+    def sent() -> list[tuple[str, str]]:
+        calls = log.read_text().split("---\n")[:-1] if log.exists() else []
+        result = []
+        for call in calls:
+            app_name, title, *body = call.rstrip("\n").split("\n")
+            assert app_name == "--app-name=tapeback"
+            result.append((title, "\n".join(body)))
+        return result
+
+    return sent
 
 
 @pytest.fixture
@@ -343,7 +404,7 @@ def ctrl_c_while_recording(monkeypatch, fake_parecord):
 
     The interrupt arrives where the real one would — in the command's wait loop — and
     only once both recorders have captured their audio: a person stops a meeting that
-    has been recorded, not one that has not started yet. Only tapeback.cli's `time` is
+    has been recorded, not one that has not started yet. Only tapeback._watch's `time` is
     replaced; the recorder's own waits stay real."""
     real_sleep = time.sleep
 
@@ -353,7 +414,91 @@ def ctrl_c_while_recording(monkeypatch, fake_parecord):
             real_sleep(0.01)
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(cli_module, "time", SimpleNamespace(sleep=_interrupt))
+    monkeypatch.setattr(_watch, "time", SimpleNamespace(sleep=_interrupt))
+
+
+@pytest.fixture
+def mic_recorder_dies(monkeypatch, fake_parecord):
+    """The microphone's recorder exits mid-meeting (a headset unplugged, PipeWire
+    restarted) while `tapeback start` waits. It is SIGKILLed, so no handler of its own
+    runs, once both recorders have captured their audio."""
+    real_sleep = time.sleep
+
+    def _kill_mic(seconds: float) -> None:
+        deadline = time.monotonic() + _RECORDERS_START_SECONDS
+        while len(fake_parecord()) < 2 and time.monotonic() < deadline:
+            real_sleep(0.01)
+        mic = next(call for call in fake_parecord() if call.device == "fake.mic")
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(mic.pid, signal.SIGKILL)
+        real_sleep(seconds)
+
+    monkeypatch.setattr(_watch, "time", SimpleNamespace(sleep=_kill_mic))
+
+
+# `tapeback start` as a terminal runs it, in a process of its own: the in-process
+# runner cannot receive a signal the way a terminal delivers one. The Whisper model is
+# the flow's two-sentence meeting, and Settings is cut off from the developer's .env
+# files the way isolate_settings_sources cuts off this process.
+_START_IN_TERMINAL = """
+import sys
+from unittest.mock import patch
+
+sys.path.insert(0, sys.argv[1])
+
+from tapeback.cli import cli
+from tapeback.settings import Settings
+from tests.fixtures import mock_whisper_by_channel
+
+Settings.model_config["env_file"] = ()
+model = mock_whisper_by_channel(
+    mic_segments=[(0.0, 2.0, "I will send the report.")],
+    monitor_segments=[(2.0, 4.0, "Thanks, see you Friday.")],
+)
+with patch("tapeback.transcriber.WhisperModel", return_value=model):
+    cli(sys.argv[2:])
+"""
+
+# Bounds a run that should finish in seconds; never asserted on.
+_TERMINAL_RUN_SECONDS = 60.0
+
+
+@dataclass(frozen=True)
+class TerminalRun:
+    returncode: int
+    output: str
+
+
+@pytest.fixture
+def ctrl_c_in_terminal(tmp_path, fake_parecord, cpu_only):
+    """Press Ctrl+C in the terminal running `tapeback start ARGS`.
+
+    A terminal sends SIGINT to its whole foreground process group, not to tapeback
+    alone: every child that shares the group receives it too. So the command runs as a
+    session leader, as a shell's foreground job is, and the signal goes to the group
+    once both recorders have captured their audio."""
+
+    def run(args: list[str]) -> TerminalRun:
+        proc = subprocess.Popen(
+            [sys.executable, "-c", _START_IN_TERMINAL, str(REPO_ROOT), *args],
+            cwd=tmp_path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            start_new_session=True,
+        )
+        deadline = time.monotonic() + _RECORDERS_START_SECONDS
+        while len(fake_parecord()) < 2 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        os.killpg(proc.pid, signal.SIGINT)
+        try:
+            output, _ = proc.communicate(timeout=_TERMINAL_RUN_SECONDS)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            output, _ = proc.communicate()
+        return TerminalRun(proc.returncode, output)
+
+    return run
 
 
 @pytest.fixture

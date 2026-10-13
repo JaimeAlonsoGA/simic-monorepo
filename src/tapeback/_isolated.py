@@ -12,6 +12,7 @@ back is for the process to end.
 from __future__ import annotations
 
 import json
+import signal
 import subprocess
 import sys
 from collections.abc import Callable
@@ -150,12 +151,24 @@ def transcribe_isolated(
     # still worth keeping — this is the out-of-memory path the isolation exists for.
     if segments:
         on_status(
-            f"Worker stopped early ({error or f'exit code {process.returncode}'}) — "
+            f"Worker stopped early ({error or _exit_reason(process.returncode)}) — "
             f"keeping the {len(segments)} segments it produced."
         )
         return segments, {"partial": True, "language": "", "duration": 0.0}
 
-    raise WorkerFailed(error or f"transcription worker exited with code {process.returncode}")
+    raise WorkerFailed(error or f"transcription worker {_exit_reason(process.returncode)}")
+
+
+def _exit_reason(returncode: int | None) -> str:
+    """Why the worker ended, in words. A SIGKILL nobody here sent is the kernel's
+    out-of-memory killer: the worker holds the whole model, so it is the process the
+    killer picks, and "exit code -9" told the user nothing they could act on."""
+    if returncode == -signal.SIGKILL:
+        return (
+            "was killed by the system, most likely for running out of memory — "
+            "close other programs, or set a smaller TAPEBACK_STT_MODEL"
+        )
+    return f"exited with code {returncode}"
 
 
 def _stop(process: subprocess.Popen[str]) -> None:

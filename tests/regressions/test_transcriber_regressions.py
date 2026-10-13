@@ -12,10 +12,12 @@ def test_cuda_fallback_to_cpu(tmp_vault):
 
     Bug: Transcriber crashed on machines without CUDA support.
     """
-    s = Settings(vault_path=tmp_vault, compute_type="float16")
+    s = Settings(vault_path=tmp_vault, device="cuda", compute_type="float16")
     call_args = []
 
-    def mock_init(model_name, device="cuda", compute_type="float16", local_files_only=True):
+    def mock_init(
+        model_name, device="cuda", compute_type="float16", cpu_threads=0, local_files_only=True
+    ):
         call_args.append(device)
         if device == "cuda":
             raise RuntimeError("CUDA not available")
@@ -33,7 +35,7 @@ def test_cuda_inference_fallback_to_cpu(tmp_vault, capsys):
     Bug: Model loaded fine on CUDA, but crashed during transcription
     when libcublas.so.12 was missing. No recovery, lost recording.
     """
-    s = Settings(vault_path=tmp_vault, compute_type="float16")
+    s = Settings(vault_path=tmp_vault, device="cuda", compute_type="float16")
 
     mock_segment = MagicMock()
     mock_segment.start = 0.0
@@ -64,10 +66,10 @@ def test_cuda_inference_fallback_to_cpu(tmp_vault, capsys):
 
     assert mock_model_cls.call_count == 2
     assert mock_model_cls.call_args_list[0] == call(
-        s.stt_model, device="cuda", compute_type="float16", local_files_only=True
+        s.stt_model, device="cuda", compute_type="float16", cpu_threads=0, local_files_only=True
     )
     assert mock_model_cls.call_args_list[1] == call(
-        s.stt_model, device="cpu", compute_type="int8", local_files_only=True
+        s.stt_model, device="cpu", compute_type="int8", cpu_threads=0, local_files_only=True
     )
 
     assert len(segments) == 1
@@ -86,7 +88,7 @@ def test_cuda_fallback_when_transcribe_call_raises(tmp_vault, capsys):
     The previous fallback only wrapped _collect_segments(), so this error escaped
     and aborted the recording.
     """
-    s = Settings(vault_path=tmp_vault, compute_type="float16")
+    s = Settings(vault_path=tmp_vault, device="cuda", compute_type="float16")
 
     mock_segment = MagicMock()
     mock_segment.start = 0.0
@@ -114,7 +116,7 @@ def test_cuda_fallback_when_transcribe_call_raises(tmp_vault, capsys):
 
     assert mock_model_cls.call_count == 2
     assert mock_model_cls.call_args_list[1] == call(
-        s.stt_model, device="cpu", compute_type="int8", local_files_only=True
+        s.stt_model, device="cpu", compute_type="int8", cpu_threads=0, local_files_only=True
     )
     assert len(segments) == 1
     assert segments[0].text == "Hello"
@@ -130,7 +132,7 @@ def test_cuda_inference_fallback_preserves_auto_language(tmp_vault):
     Bug: transcriber.py line 145 used self._settings.language ("auto") instead
     of the resolved variable (None). Whisper doesn't accept "auto" as a language code.
     """
-    s = Settings(vault_path=tmp_vault, compute_type="float16", language="auto")
+    s = Settings(vault_path=tmp_vault, device="cuda", compute_type="float16", language="auto")
 
     mock_segment = MagicMock()
     mock_segment.start = 0.0

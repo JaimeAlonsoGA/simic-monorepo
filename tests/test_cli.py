@@ -5,14 +5,17 @@ Mock only ML models (WhisperModel, pyannote Pipeline). Everything else
 """
 
 import shutil
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import SecretStr
 
+from tapeback._mono import _maybe_diarize_segments
 from tapeback.cli import cli
 from tapeback.models import Segment
-from tapeback.pipeline import _maybe_diarize_segments, process_stereo_file, stop_and_process
+from tapeback.pipeline import process_stereo_file, stop_and_process
+from tapeback.recorder import session_root
 from tapeback.settings import Settings
 from tapeback.summarizer import _PROVIDER_ENV_VARS
 from tests.fixtures import (
@@ -57,7 +60,7 @@ def test_process_mono_pipeline(runner, tmp_path, monkeypatch, vault_env):
     assert "date: 2026-03-20" in md_content
 
     # Audio copied to vault
-    assert (vault_env / "attachments" / "audio" / "2026-03-20_10-00-00.wav").exists()
+    assert not (vault_env / "attachments").exists()
 
     # Test --name option
     audio2 = tmp_path / "recording.wav"
@@ -199,7 +202,7 @@ def test_stop_and_process_pipeline(tmp_vault, session_wavs):
     md_content = md_path.read_text()
     assert "Hello." in md_content
     assert "World." in md_content
-    assert (tmp_vault / "attachments" / "audio" / "2026-03-20_10-00-00.wav").exists()
+    assert not (tmp_vault / "attachments").exists()
     assert not session_dir.exists()  # temp files cleaned up
 
 
@@ -526,7 +529,8 @@ def test_start_prints_remote_stt_notice(runner, vault_env):
     settings = Settings(vault_path=vault_env, stt_backend="openai")
     recorder = MagicMock()
     recorder.start.return_value = "remote-notice"
-    recorder.is_recording.side_effect = [True, False, False]
+    recorder.is_recording.side_effect = [True, False]
+    recorder.has_session.return_value = False
 
     with (
         patch("tapeback.cli.get_settings", return_value=settings),
@@ -543,10 +547,11 @@ def test_start_prints_remote_stt_notice(runner, vault_env):
 
 
 def test_start_remote_stt_notice_mentions_live_upload(runner, vault_env):
-    settings = Settings(vault_path=vault_env, stt_backend="openai", live=True)
+    settings = Settings(vault_path=vault_env, stt_backend="openai", live=True, audio_format="wav")
     recorder = MagicMock()
     recorder.start.return_value = "remote-live"
-    recorder.is_recording.side_effect = [True, False, False]
+    recorder.is_recording.side_effect = [True, False]
+    recorder.has_session.return_value = False
     live = MagicMock()
     live.live_md_path = vault_env / "live.md"
 
@@ -570,7 +575,8 @@ def test_start_local_backend_has_no_remote_stt_notice(runner, vault_env):
     settings = Settings(vault_path=vault_env, stt_backend="local")
     recorder = MagicMock()
     recorder.start.return_value = "local-silent"
-    recorder.is_recording.side_effect = [True, False, False]
+    recorder.is_recording.side_effect = [True, False]
+    recorder.has_session.return_value = False
 
     with (
         patch("tapeback.cli.get_settings", return_value=settings),
@@ -585,18 +591,39 @@ def test_start_local_backend_has_no_remote_stt_notice(runner, vault_env):
     assert "Remote STT enabled" not in result.stderr
 
 
-def test_stop_prints_remote_stt_notice(runner, vault_env):
+def test_stop_prints_remote_stt_notice(runner, vault_env, tmp_path):
     settings = Settings(vault_path=vault_env, stt_backend="openai")
+    recorder = MagicMock()
+    recorder.stop.return_value = (tmp_path / "monitor.mp3", tmp_path / "mic.mp3")
 
     with (
         patch("tapeback.cli.get_settings", return_value=settings),
-        patch("tapeback.cli.Recorder"),
-        patch("tapeback.pipeline.stop_and_process"),
+        patch("tapeback.cli.Recorder", return_value=recorder),
+        patch("tapeback.pipeline.process_session"),
     ):
         result = runner.invoke(cli, ["stop"])
 
     assert result.exit_code == 0, result.output + str(result.exception or "")
     assert "Remote STT enabled: meeting audio will be uploaded to openai." in result.stderr
+
+
+def test_stop_without_a_recording_says_so(runner, vault_env):
+    result = runner.invoke(cli, ["stop"])
+
+    assert result.exit_code == 1
+    assert result.stderr == "Stopping recording...\nError: No recording in progress.\n"
+
+
+def test_stop_without_a_recording_points_at_recordings_left_to_transcribe(runner, vault_env):
+    (session_root(Settings()) / "2026-10-13_09-00-00").mkdir()
+
+    result = runner.invoke(cli, ["stop"])
+
+    assert result.exit_code == 1
+    assert result.stderr == (
+        "Stopping recording...\nError: No recording in progress. "
+        "Recordings not yet transcribed are finished with 'tapeback recover'.\n"
+    )
 
 
 def test_process_prints_remote_stt_notice(runner, tmp_path, vault_env):
@@ -628,3 +655,94 @@ def test_process_local_backend_has_no_remote_stt_notice(runner, tmp_path, vault_
 
     assert result.exit_code == 0, result.output + str(result.exception or "")
     assert "Remote STT enabled" not in result.stderr
+
+
+# --- recording guards and recovery ---
+
+
+def test_start_refuses_live_transcription_over_an_mp3_capture(runner, vault_env, monkeypatch):
+    monkeypatch.setenv("TAPEBACK_LIVE", "true")
+
+    with patch("tapeback.cli.Recorder") as recorder_cls:
+        result = runner.invoke(cli, ["start", "live-mp3"])
+
+    assert result.exit_code == 1
+    assert result.stderr == (
+        "Error: Live transcription reads a growing WAV. "
+        "Use --no-live, or set TAPEBACK_AUDIO_FORMAT=wav.\n"
+    )
+    recorder_cls.assert_not_called()
+
+
+def test_recover_an_unknown_name_is_an_error(runner, vault_env):
+    result = runner.invoke(cli, ["recover", "no-such-meeting"])
+
+    assert result.exit_code == 1
+    assert result.stderr == "Error: No leftover recording named 'no-such-meeting'.\n"
+
+
+def test_status_reports_an_interrupted_recording(runner, vault_env):
+    recorder = MagicMock()
+    recorder.get_session_info.return_value = None
+    recorder.has_session.return_value = True
+    recorder.leftover_sessions.return_value = []
+
+    with (
+        patch("tapeback.cli.Recorder", return_value=recorder),
+        patch("shutil.which", return_value=None),
+    ):
+        result = runner.invoke(cli, ["status"])
+
+    assert result.exit_code == 0
+    assert result.output.startswith(
+        "A recording was interrupted. Run 'tapeback stop' to transcribe it.\n"
+    )
+
+
+def test_recover_keeps_going_past_a_recording_that_fails(runner, vault_env, tmp_path):
+    broken, fine = tmp_path / "broken", tmp_path / "fine"
+    recorder = MagicMock()
+    recorder.leftover_sessions.return_value = [broken, fine]
+
+    with (
+        patch("tapeback.cli.Recorder", return_value=recorder),
+        patch(
+            "tapeback.pipeline.process_session",
+            side_effect=[RuntimeError("No mic recording in broken"), fine / "note.md"],
+        ) as process_session,
+    ):
+        result = runner.invoke(cli, ["recover", "--no-summarize"])
+
+    assert result.exit_code == 1
+    assert [call.args[0] for call in process_session.call_args_list] == [broken, fine]
+    assert result.stderr == (
+        "Recovering broken...\n"
+        "Failed to recover broken: No mic recording in broken\n"
+        "Recovering fine...\n"
+        "Error: Not recovered: broken.\n"
+    )
+
+
+@pytest.mark.parametrize(
+    ("free", "warned"),
+    [(1_039_999_999, True), (1_040_000_000, False)],
+)
+def test_start_warns_when_two_hours_of_meeting_would_not_fit(runner, vault_env, free, warned):
+    recorder = MagicMock()
+    recorder.start.return_value = "short-disk"
+    recorder.is_recording.return_value = False
+    recorder.has_session.return_value = False
+
+    with (
+        patch("tapeback.cli.Recorder", return_value=recorder),
+        patch("tapeback.cli.detect_devices", return_value=("mon", "mic")),
+        patch("tapeback.cli.shutil.disk_usage", return_value=SimpleNamespace(free=free)),
+    ):
+        result = runner.invoke(cli, ["start", "short-disk", "--no-summarize"])
+
+    assert result.exit_code == 0, result.output + str(result.exception or "")
+    warning = (
+        "Warning: only 1.0 GB free for recordings — about 119 minutes of meeting can be "
+        "recorded and transcribed.\n"
+    )
+    assert (warning in result.stderr) is warned

@@ -173,6 +173,40 @@ def low_confidence_rate(probabilities: list[float], threshold: float) -> float:
     return below / len(probabilities) * PERCENT
 
 
+def _wer_tokens(text: str) -> list[str]:
+    # Letters and digits alike: a reference says "1990" and so, usually, does Whisper.
+    return re.findall(r"[^\W_]+", text.lower())
+
+
+def word_error_rate(reference: str, hypothesis: str) -> float:
+    """Word error rate of `hypothesis` against `reference`, as a percentage.
+
+    (substitutions + deletions + insertions) / reference words, after both sides are
+    lowercased and stripped of punctuation — so it scores what was heard, not how it
+    was written; punctuation has its own metric above. Needs a reference transcript,
+    which only a benchmark corpus has; the other metrics here do not.
+    """
+    ref = _wer_tokens(reference)
+    hyp = _wer_tokens(hypothesis)
+    if not ref:
+        return 0.0 if not hyp else PERCENT
+    # One row of the edit-distance table at a time: a long channel is thousands of
+    # words on each side, and the full table would be millions of cells.
+    previous = list(range(len(hyp) + 1))
+    for i, ref_word in enumerate(ref, start=1):
+        current = [i]
+        for j, hyp_word in enumerate(hyp, start=1):
+            current.append(
+                min(
+                    previous[j] + 1,
+                    current[j - 1] + 1,
+                    previous[j - 1] + (ref_word != hyp_word),
+                )
+            )
+        previous = current
+    return previous[-1] / len(ref) * PERCENT
+
+
 def count_recognised_terms(text: str, terms: list[str]) -> tuple[int, list[str]]:
     """Return how many expected terms appear, and which are missing.
 

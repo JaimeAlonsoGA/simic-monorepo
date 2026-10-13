@@ -10,6 +10,37 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 <!-- New entries go HERE, via scripts/changelog_add.py — never under a dated release. -->
 <!-- Subsections in order: Security / Added / Changed / Fixed / Removed / Docs. -->
 
+### Added
+- **Ctrl+C gives the terminal back.** A stopped meeting is transcribed in a detached process; `tapeback status` shows how much is left and a desktop notification says when the note is ready. `--wait` on `start`/`stop`, or `TAPEBACK_BACKGROUND=false`, keeps it in the foreground.
+- **`tapeback recover [NAME]`** transcribes recordings whose processing failed or was interrupted. `tapeback status` lists them.
+- **Light recordings, transcript only.** Each channel is captured as MP3 (`TAPEBACK_AUDIO_FORMAT=mp3`, `TAPEBACK_MP3_BITRATE_K=64`): about 60 MB per hour of meeting. The audio is deleted once the note exists, and never copied into the vault; `TAPEBACK_KEEP_AUDIO=true` archives it and links it from the note. `wav` keeps the old capture, needed for live mode.
+- **`tapeback doctor`** checks the tools, the sound server and its sources, the vault, disk space for recordings, the Whisper model and recordings waiting to be transcribed — before a meeting, not during one.
+- **`tapeback start` shows the recording as it goes**: elapsed time and size per channel, and a warning when a channel stops being written — a capture that had quietly stopped used to look like one that worked.
+- `TAPEBACK_CPU_THREADS`: threads Whisper decodes with on the CPU (default: faster-whisper's 4).
+- `scripts/make_bench_meeting.py` builds a benchmark meeting with a reference transcript from public speech (FLEURS), and `scripts/bench_transcribe.py` scores word error rate and sweeps beam size, CPU threads and batch size. Development-only.
+- **Transcription says how long is left** (`about 18 min left`), from the rate so far: on a CPU an hour of meeting takes most of an hour, and a percentage alone does not say whether to wait.
+- **A desktop notification when the note is ready, or could not be made** (`notify-send`; `TAPEBACK_NOTIFY=false` turns it off). From `start`, `stop`, `recover`, `process` and the tray alike.
+- **`start` warns when the other side has been silent for three minutes**: a call playing on an output tapeback is not recording used to cost the whole meeting without a sign.
+- **`start` warns when the disk cannot hold two hours of meeting**, before the meeting rather than when the disk fills.
+
+### Changed
+- Defaults: `TAPEBACK_SAMPLE_RATE=16000` (Whisper's rate), `TAPEBACK_DEVICE=cpu`, `TAPEBACK_VAULT_PATH=~/code/obsidian`.
+- Loudness normalisation runs one ffmpeg per channel, side by side: 44 s instead of 86 s per hour of meeting, byte-identical output.
+- **One transcription at a time.** Meetings stopped back to back wait their turn instead of loading two Whisper models at once, which ran a laptop out of memory.
+- **`tapeback stop` with nothing recording** says so, and points at `tapeback recover` when recordings wait to be transcribed, instead of a traceback.
+
+### Fixed
+- **An interrupted first model download no longer breaks every run after it.** A download cut short left the model without `model.bin`; the cache lookup accepted it, and each run failed with `Unable to open file 'model.bin'` until the cache was deleted by hand. tapeback now downloads what is missing.
+- **Ctrl+C no longer loses the meeting.** A terminal sends Ctrl+C to its whole foreground process group, so the recorders died with the keystroke; `tapeback start` took that for a `tapeback stop` from another terminal and exited 0 — no note, no message, the audio orphaned. The recorders now run in a session of their own, and tapeback stops them itself, recorder before encoder.
+- **A recorder dying mid-meeting no longer discards the meeting.** One exited recorder (an unplugged headset, a PipeWire restart) made `start` return silently. It now names the channel that stopped and transcribes what was captured.
+- **A session left by a killed `start` no longer records on.** The next `start` stops its surviving recorder; the audio stays for `tapeback recover`.
+- **Live transcription at 16 kHz.** Chunks were decimated as if captured at 48 kHz, so Whisper heard a third of each one. Live mode now requires a sample rate that is a multiple of 16000.
+- **A transcription worker killed for lack of memory says so**, instead of `exited with code -9`.
+- **A meeting already being transcribed is no longer announced as failed** when a second `tapeback recover` reaches it.
+
+### Docs
+- `docs/spec/BACKLOG.md` records the first CPU benchmark (threads, beam, batching, parallel channels) and how to repeat it on the recording machine.
+
 ## [0.9.10] — 2026-10-10
 
 ### Changed

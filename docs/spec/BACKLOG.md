@@ -240,3 +240,47 @@ merge of real speakers is too weak a signal to rely on; diarization runs at roug
 the recording's length because it meets the thermal clamp with no check, no telemetry
 and warnings that bypass the run record. 0.9.9 fixed only the bridging defect; the
 rest belongs with pluggable diarization models, chosen from a bench table.
+
+---
+
+## 7. CPU defaults: measured on one machine, to be measured on the laptop
+
+**Measured 2026-10-12** with `scripts/make_bench_meeting.py` (15 minutes of FLEURS
+Spanish read speech as a two-sided meeting, seed 1; 939 reference words on the mic,
+846 on the monitor) and `scripts/bench_transcribe.py`, `large-v3-turbo`, `int8`,
+`language=es`, no hotwords. Machine: a Docker VM on Apple silicon, 8 vCPUs pinned —
+**not** the x86 laptop meetings are recorded on.
+
+| beam | threads | batch | mic time | monitor time | total | WER mic | WER monitor |
+|---|---|---|---|---|---|---|---|
+| 4 | default (4) | 0 | 86.3 s | 73.0 s | **159 s** | **4.1** | **2.7** |
+| 4 | 8 | 0 | 172.4 s | 156.0 s | 328 s | 4.1 | 2.7 |
+| 1 | default (4) | 0 | 77.3 s | 68.9 s | 146 s | 4.1 | 3.0 |
+| 1 | 8 | 0 | 100.0 s | 84.9 s | 185 s | 4.1 | 3.0 |
+| 4 | 8 | 8 | 71.6 s | 67.5 s | 139 s | 4.4 | 3.0 |
+
+Both channels at once (one worker each, default threads): 165 s wall against 159 s one
+after the other.
+
+What it says, on this machine:
+
+- **More threads is not more speed.** Eight took twice as long as four. The VM behaves
+  like about four real cores; the rest only adds synchronisation. For the same reason
+  transcribing the two channels in parallel gained nothing.
+- **beam 1 buys 8 % for a little accuracy** on the monitor (2.7 → 3.0). Not worth it.
+- **Batching is the fastest point** (13 % under the default) but costs WER on both
+  channels and silently drops `no_speech_threshold` and the temperature ladder (see
+  "The batching trap" in `done/2026-08-05-transcription-speed-and-quality.md`), which
+  read speech with clean gaps cannot show the price of.
+
+Nothing changed as a result: `TAPEBACK_CPU_THREADS` is exposed, the defaults stay.
+**What decides it is the same grid on the recording laptop**, where the cores are
+real x86 cores and both "more threads" and "both channels at once" may well pay:
+
+    uv run python scripts/make_bench_meeting.py --fleurs tmp/fleurs/es_419 --out tmp/bench-es
+    uv run python scripts/bench_transcribe.py --manifest tmp/bench-es/manifest.json \
+        --device cpu --compute-types int8 --language es \
+        --cpu-threads 0,6,8,12 --beam-sizes 4 --output-dir tmp/bench-reports
+
+If threads scale there, parallel channels (two workers, threads split between them) is
+the next experiment — a pipeline change, so it waits for that table.

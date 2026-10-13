@@ -15,16 +15,20 @@ Usage:
         --models large-v3-turbo,large-v3 \\
         --compute-types float16,int8_float16 \\
         --hotwords-modes off,on \\
+        --beam-sizes 1,4 --cpu-threads 0,8 \\
         --output-dir reports/bench
 
 The manifest is deliberately NOT committed: it points at personal recordings. Copy
 `scripts/bench_manifest.example.json` and fill in your own paths and the terms each
-recording is expected to contain.
+recording is expected to contain. An entry with a `reference` transcript is also
+scored by word error rate; `scripts/make_bench_meeting.py` builds such a corpus from
+public speech when there are no transcribed recordings of one's own.
 """
 
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import statistics
 import sys
@@ -43,6 +47,7 @@ from tapeback._quality import (
     find_hallucination_markers,
     low_confidence_rate,
     punctuation_per_1000_words,
+    word_error_rate,
 )
 from tapeback.formatter import WORD_LOW_CONFIDENCE
 from tapeback.settings import Settings
@@ -57,6 +62,9 @@ class Result:
     model: str
     compute_type: str
     hotwords: str
+    beam_size: int
+    cpu_threads: int
+    batch_size: int
     duration_seconds: float
     elapsed_seconds: float
     rtf: float
@@ -71,6 +79,8 @@ class Result:
     terms_expected: int
     terms_found: int
     terms_missing: list[str]
+    # Against the manifest's reference transcript; None when the entry has none.
+    wer_percent: float | None = None
     # The one-line GPU summary as the pipeline reports it (clocks, temperature,
     # throttle share) — kept as text so the benchmark and the tool say the same thing.
     gpu: str | None = None
@@ -90,12 +100,15 @@ def _load_manifest(path: Path) -> list[dict]:
 
 def run_one(
     audio: Path,
-    terms: list[str],
+    entry: dict,
     settings: Settings,
     *,
     hotwords_mode: str,
 ) -> Result:
     """Measure one configuration against one recording."""
+    terms: list[str] = entry.get("terms", [])
+    reference: str | None = entry.get("reference")
+
     captured: list[str] = []
     gpu_line: list[str] = []
 
@@ -112,6 +125,9 @@ def run_one(
             model=settings.stt_model,
             compute_type=settings.compute_type,
             hotwords=hotwords_mode,
+            beam_size=settings.beam_size,
+            cpu_threads=settings.cpu_threads,
+            batch_size=settings.batch_size,
             duration_seconds=0.0,
             elapsed_seconds=time.monotonic() - started,
             rtf=0.0,
@@ -143,6 +159,9 @@ def run_one(
         model=settings.stt_model,
         compute_type=settings.compute_type,
         hotwords=hotwords_mode,
+        beam_size=settings.beam_size,
+        cpu_threads=settings.cpu_threads,
+        batch_size=settings.batch_size,
         duration_seconds=duration,
         elapsed_seconds=round(elapsed, 1),
         rtf=round(duration / elapsed, 2) if elapsed else 0.0,
@@ -157,20 +176,36 @@ def run_one(
         terms_expected=len(terms),
         terms_found=found,
         terms_missing=missing,
+        wer_percent=None if reference is None else round(word_error_rate(reference, text), 1),
         gpu=gpu_line[0] if gpu_line else None,
         events=captured,
     )
 
 
+def _config_label(r: Result) -> str:
+    return (
+        f"{r.model} | {r.compute_type} | {r.hotwords} | beam {r.beam_size} | "
+        f"threads {r.cpu_threads or 'default'} | batch {r.batch_size}"
+    )
+
+
+_CONFIG_HEADER = "model | compute | hotwords | beam | threads | batch"
+_CONFIG_RULE = "---|---|---|---|---|---"
+
+
+def _wer(value: float | None) -> str:
+    return "-" if value is None else f"{value:.1f}"
+
+
 def _markdown_table(results: list[Result]) -> str:
     header = (
-        "| recording | model | compute | hotwords | elapsed | RTF | segs | "
+        f"| recording | {_CONFIG_HEADER} | elapsed | RTF | WER % | segs | "
         "hallu | rep-w | rep-p | terms |\n"
-        "|---|---|---|---|---|---|---|---|---|---|---|"
+        f"|---|{_CONFIG_RULE}|---|---|---|---|---|---|---|---|"
     )
     rows = [
-        f"| {r.recording} | {r.model} | {r.compute_type} | {r.hotwords} | "
-        f"{r.elapsed_seconds:.1f}s | {r.rtf:.2f}x | {r.segments} | "
+        f"| {r.recording} | {_config_label(r)} | "
+        f"{r.elapsed_seconds:.1f}s | {r.rtf:.2f}x | {_wer(r.wer_percent)} | {r.segments} | "
         f"{r.hallucination_markers} | {r.repeated_words} | {r.repeated_phrases} | "
         f"{r.terms_found}/{r.terms_expected} |"
         for r in results
@@ -180,22 +215,24 @@ def _markdown_table(results: list[Result]) -> str:
 
 def _summary(results: list[Result]) -> str:
     """Aggregate per configuration, so the winner is visible without reading rows."""
-    by_config: dict[tuple[str, str, str], list[Result]] = {}
+    by_config: dict[str, list[Result]] = {}
     for r in results:
-        by_config.setdefault((r.model, r.compute_type, r.hotwords), []).append(r)
+        by_config.setdefault(_config_label(r), []).append(r)
 
     lines = [
-        "| model | compute | hotwords | median RTF | hallu | loops | low-conf % "
-        "| punct/1k | terms |",
-        "|---|---|---|---|---|---|---|---|---|",
+        f"| {_CONFIG_HEADER} | total time | median RTF | WER % | hallu | loops | "
+        "low-conf % | punct/1k | terms |",
+        f"|{_CONFIG_RULE}|---|---|---|---|---|---|---|---|",
     ]
-    for (model, compute, hot), group in sorted(by_config.items()):
+    for label, group in sorted(by_config.items()):
         found = sum(r.terms_found for r in group)
         expected = sum(r.terms_expected for r in group)
         loops = sum(r.repeated_words + r.repeated_phrases for r in group)
+        scored = [r.wer_percent for r in group if r.wer_percent is not None]
         lines.append(
-            f"| {model} | {compute} | {hot} | "
+            f"| {label} | {sum(r.elapsed_seconds for r in group):.0f}s | "
             f"{statistics.median(r.rtf for r in group):.2f}x | "
+            f"{_wer(statistics.mean(scored) if scored else None)} | "
             f"{sum(r.hallucination_markers for r in group)} | {loops} | "
             f"{statistics.median(r.low_confidence_percent for r in group):.1f} | "
             f"{statistics.median(r.punctuation_per_1000 for r in group):.0f} | "
@@ -211,6 +248,9 @@ def main() -> int:
     parser.add_argument("--compute-types", default="float16")
     parser.add_argument("--hotwords-modes", default="off")
     parser.add_argument("--hotwords", default="", help="glossary used when mode is 'on'")
+    parser.add_argument("--beam-sizes", default="4")
+    parser.add_argument("--cpu-threads", default="0", help="0 is faster-whisper's default (4)")
+    parser.add_argument("--batch-sizes", default="0", help="0 disables batched inference")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--language", default="ru")
     parser.add_argument("--output-dir", type=Path, default=Path("reports/bench"))
@@ -238,51 +278,60 @@ def main() -> int:
     args = parser.parse_args()
 
     entries = _load_manifest(args.manifest)
-    models = args.models.split(",")
-    computes = args.compute_types.split(",")
-    modes = args.hotwords_modes.split(",")
+    grid = list(
+        itertools.product(
+            args.models.split(","),
+            args.compute_types.split(","),
+            args.hotwords_modes.split(","),
+            [int(v) for v in args.beam_sizes.split(",")],
+            [int(v) for v in args.cpu_threads.split(",")],
+            [int(v) for v in args.batch_sizes.split(",")],
+            entries,
+        )
+    )
 
     results: list[Result] = []
-    total = len(entries) * len(models) * len(computes) * len(modes)
-    index = 0
-
-    for model in models:
-        for compute in computes:
-            for mode in modes:
-                for entry in entries:
-                    index += 1
-                    audio = Path(entry["path"]).expanduser()
-                    label = f"[{index}/{total}] {model}/{compute} hotwords={mode} {audio.name}"
-                    print(label, flush=True)
-                    if not audio.exists():
-                        print(f"  skipped: {audio} not found", flush=True)
-                        continue
-                    if args.clamp_timeout:
-                        wait_for_clamp_release(
-                            args.clamp_timeout,
-                            report=lambda m: print(f"  {m}", flush=True),
-                        )
-                    settings = Settings(
-                        stt_model=model,
-                        compute_type=compute,
-                        device=args.device,
-                        language=args.language,
-                        hotwords=args.hotwords if mode == "on" else "",
-                        run_log=False,
-                    )
-                    result = run_one(audio, entry.get("terms", []), settings, hotwords_mode=mode)
-                    results.append(result)
-                    print(
-                        f"  {result.elapsed_seconds:.1f}s RTF={result.rtf:.2f}x "
-                        f"hallu={result.hallucination_markers} "
-                        f"terms={result.terms_found}/{result.terms_expected}"
-                        + (f" ERROR {result.error}" if result.error else ""),
-                        flush=True,
-                    )
-                    if result.gpu:
-                        print(f"  {result.gpu}", flush=True)
-                    if args.pause_seconds and index < total:
-                        time.sleep(args.pause_seconds)
+    for index, (model, compute, mode, beam, threads, batch, entry) in enumerate(grid, start=1):
+        audio = Path(entry["path"]).expanduser()
+        print(
+            f"[{index}/{len(grid)}] {model}/{compute} hotwords={mode} beam={beam} "
+            f"threads={threads} batch={batch} {audio.name}",
+            flush=True,
+        )
+        if not audio.exists():
+            print(f"  skipped: {audio} not found", flush=True)
+            continue
+        if args.clamp_timeout:
+            wait_for_clamp_release(
+                args.clamp_timeout,
+                report=lambda m: print(f"  {m}", flush=True),
+            )
+        settings = Settings(
+            stt_model=model,
+            compute_type=compute,
+            device=args.device,
+            language=args.language,
+            hotwords=args.hotwords if mode == "on" else "",
+            beam_size=beam,
+            cpu_threads=threads,
+            batch_size=batch,
+            run_log=False,
+            # A grid measures every point from scratch; a cached channel would time 0 s.
+            resume_cache=False,
+        )
+        result = run_one(audio, entry, settings, hotwords_mode=mode)
+        results.append(result)
+        print(
+            f"  {result.elapsed_seconds:.1f}s RTF={result.rtf:.2f}x "
+            f"WER={_wer(result.wer_percent)} hallu={result.hallucination_markers} "
+            f"terms={result.terms_found}/{result.terms_expected}"
+            + (f" ERROR {result.error}" if result.error else ""),
+            flush=True,
+        )
+        if result.gpu:
+            print(f"  {result.gpu}", flush=True)
+        if args.pause_seconds and index < len(grid):
+            time.sleep(args.pause_seconds)
 
     if not results:
         print("No runs completed — check the manifest paths.", file=sys.stderr)

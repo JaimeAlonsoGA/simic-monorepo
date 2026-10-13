@@ -131,6 +131,27 @@ def test_worker_dying_with_nothing_raises(settings, spawn):
         transcribe_isolated(Path("/fake/audio.wav"), settings, on_status=lambda _m: None)
 
 
+def test_worker_killed_by_the_system_says_out_of_memory(settings, spawn):
+    spawn([], returncode=-9)
+
+    with pytest.raises(WorkerFailed) as raised:
+        transcribe_isolated(Path("/fake/audio.wav"), settings, on_status=lambda _m: None)
+
+    assert str(raised.value) == (
+        "transcription worker was killed by the system, most likely for running out of "
+        "memory — close other programs, or set a smaller TAPEBACK_STT_MODEL"
+    )
+
+
+def test_worker_exiting_with_an_error_code_reports_it(settings, spawn):
+    spawn([], returncode=3)
+
+    with pytest.raises(WorkerFailed) as raised:
+        transcribe_isolated(Path("/fake/audio.wav"), settings, on_status=lambda _m: None)
+
+    assert str(raised.value) == "transcription worker exited with code 3"
+
+
 def test_worker_error_event_is_reported(settings, spawn):
     spawn([_line("error", message="RuntimeError: CUDA out of memory")], returncode=1)
 

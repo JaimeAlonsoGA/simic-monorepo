@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from tapeback import const
 from tapeback._stt_caps import openai_capabilities_for
 from tapeback.glossary import DEFAULT_HOTWORDS
 
@@ -35,6 +36,7 @@ type LLMProvider = Literal[
 # Today the only remote backend is "openai" (Audio Transcriptions API).
 # Remote STT uploads meeting audio off-machine — opt-in only.
 type SttBackend = Literal["local", "openai"]
+type AudioFormat = Literal["wav", "mp3"]
 
 DEFAULT_LOCAL_STT_MODEL = "large-v3-turbo"
 # OpenAI remote default: whisper-1 keeps timestamps so local pyannote still works.
@@ -50,8 +52,9 @@ class Settings(BaseSettings):
         populate_by_name=True,
     )
 
-    # Output directory (Obsidian vault or any folder)
-    vault_path: Path = Path.home() / "tapeback"
+    # Output directory (Obsidian vault or any folder).
+    # This fork writes into the Obsidian vault on this machine.
+    vault_path: Path = Path.home() / "code" / "obsidian"
 
     # Subdirectories in vault
     meetings_dir: str = "meetings"
@@ -88,9 +91,13 @@ class Settings(BaseSettings):
 
     # Decoding / device (local backend; remote ignores most of these)
     language: str = "auto"
-    device: str = "cuda"
+    # This machine has no NVIDIA GPU. Upstream defaults to cuda.
+    device: str = "cpu"
     compute_type: str = "auto"  # "int8"/"float16"
     beam_size: int = 4
+    # Threads ctranslate2 decodes with on the CPU. 0 is faster-whisper's default of 4,
+    # whatever the machine has.
+    cpu_threads: int = Field(default=0, ge=0)
     # Temperature fallback ladder. Decoding starts at 0.0 (deterministic, best
     # quality) and steps up only when a segment decodes poorly. The HIGH steps are
     # what break Whisper out of hallucination loops on noisy/quiet input — keep the
@@ -131,6 +138,12 @@ class Settings(BaseSettings):
     # (uses word timestamps, which are always on). None disables it.
     hallucination_silence_threshold: float | None = Field(default=None, ge=0.0)
 
+    # Announce on the desktop (notify-send) when a note is ready or could not be made.
+    notify: bool = True
+    # Once a recording stops, transcribe it in a detached process and give the terminal
+    # back; 'tapeback status' shows its progress. `--wait` on start/stop overrides it.
+    background: bool = True
+
     # Write one JSON record per processing run (config + status lines + outcome), so a
     # run that failed or was interrupted can be diagnosed afterwards. Never contains
     # credentials — the recorded fields are an explicit allow-list in _runlog.py.
@@ -158,7 +171,7 @@ class Settings(BaseSettings):
 
     # Refuse to load a model on CUDA below this much free VRAM, and use the CPU instead.
     # A CUDA out-of-memory during load leaks the allocation on ctranslate2's C++ side
-    # for the life of the process (see transcriber._enough_vram), so the only reliable
+    # for the life of the process (see _device._enough_vram), so the only reliable
     # cure is not to trigger it. The smallest configuration measured needs ~1115 MiB.
     min_free_vram_mib: int = Field(default=1200, ge=0)
 
@@ -187,7 +200,19 @@ class Settings(BaseSettings):
     # Audio
     monitor_source: str = "auto"
     mic_source: str = "auto"
-    sample_rate: int = 48000
+    # 16 kHz is Whisper's native rate. Capturing higher only inflates the file.
+    sample_rate: int = 16000
+    # mp3 while the meeting is in progress. The pipeline still builds a temporary
+    # WAV to split channels; that file is removed with the session directory.
+    # wav keeps the upstream capture path, including live transcription.
+    audio_format: AudioFormat = "mp3"
+    # Mono speech. 64 kbps is about 0.5 MB per minute per channel. 160 is the ceiling
+    # of MP3 at 16-24 kHz (MPEG-2 Layer III); above it ffmpeg refuses to start.
+    mp3_bitrate_k: int = Field(default=64, ge=16, le=160)
+    # Archive the recording in the vault and link it from the note. Off: the audio is
+    # only a step towards the transcript, and goes once the note is written. A meeting
+    # whose processing fails keeps its recording either way, for `tapeback recover`.
+    keep_audio: bool = False
     # Where recordings in progress live. None → XDG state dir
     # (~/.local/state/tapeback/sessions). Must be private to this user — see
     # recorder.session_root().
@@ -288,6 +313,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"live_min_chunk ({self.live_min_chunk}s) must be <= "
                 f"live_interval ({self.live_interval}s); otherwise cycles starve."
+            )
+        if self.live and self.sample_rate % const.SAMPLE_RATE_16K:
+            raise ValueError(
+                f"live transcription decimates to 16 kHz, so sample_rate ({self.sample_rate}) "
+                "must be a multiple of 16000."
             )
         return self
 

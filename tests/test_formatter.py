@@ -159,6 +159,7 @@ def test_format_markdown_without_raw_segments_unchanged():
 
 def test_save_to_vault_pipeline(settings, tmp_vault, tmp_path):
     """save_to_vault should create directories, save .md and .wav, and avoid overwrites."""
+    settings = settings.model_copy(update={"audio_format": "wav"})
     stereo_wav = tmp_path / "stereo.wav"
     stereo_wav.write_bytes(b"fake wav data")
 
