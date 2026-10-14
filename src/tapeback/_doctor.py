@@ -8,6 +8,7 @@ turned into a note as configured; "warn" means it can, with something worth know
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -22,6 +23,7 @@ from huggingface_hub.errors import LocalEntryNotFoundError
 from tapeback import const
 from tapeback.recorder import Recorder, detect_devices, session_root
 from tapeback.settings import Settings
+from tapeback.summarizer import available_providers
 
 type Outcome = Literal["ok", "warn", "fail"]
 
@@ -144,6 +146,42 @@ def _pending(settings: Settings) -> Check:
     return Check("Pending", "ok", "nothing waiting")
 
 
+def _installed(module: str) -> bool:
+    """Whether an optional extra's package is there, without importing it: pyannote
+    pulls in torch, seconds of startup for a check. A dotted name imports its parent,
+    which raises rather than returning None when the parent is missing."""
+    try:
+        return importlib.util.find_spec(module) is not None
+    except ModuleNotFoundError:
+        return False
+
+
+def _speakers(settings: Settings) -> Check:
+    if not settings.diarize:
+        return Check("Speakers", "ok", "off")
+    if not _installed("pyannote.audio"):
+        return Check("Speakers", "warn", "pyannote is not installed — install tapeback[diarize]")
+    if not settings.hf_token.get_secret_value():
+        return Check("Speakers", "warn", "no Hugging Face token — set TAPEBACK_HF_TOKEN")
+    return Check("Speakers", "ok", "pyannote")
+
+
+def _summary(settings: Settings) -> Check:
+    if not settings.summarize:
+        return Check("Summary", "ok", "off")
+    providers = available_providers(settings)
+    if not providers:
+        return Check(
+            "Summary",
+            "warn",
+            f"no API key for {settings.llm_provider} — notes are saved without a summary",
+        )
+    package = "anthropic" if providers[0] == "anthropic" else "openai"
+    if not _installed(package):
+        return Check("Summary", "warn", f"{package} is not installed — install tapeback[llm]")
+    return Check("Summary", "ok", ", then ".join(providers))
+
+
 CHECKS: tuple[Callable[[Settings], Check], ...] = (
     _tools,
     _sound_server,
@@ -151,6 +189,8 @@ CHECKS: tuple[Callable[[Settings], Check], ...] = (
     _vault,
     _disk,
     _model,
+    _speakers,
+    _summary,
     _pending,
 )
 

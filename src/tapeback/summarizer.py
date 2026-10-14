@@ -147,6 +147,11 @@ def _build_provider_chain(settings: Settings) -> list[tuple[str, str, str]]:
     return chain
 
 
+def available_providers(settings: Settings) -> list[str]:
+    """The providers a summary would be asked of, in order. Empty: none has a key."""
+    return [provider for provider, _key, _model in _build_provider_chain(settings)]
+
+
 def _call_llm(system_prompt: str, user_message: str, settings: Settings) -> str:
     """Call LLM with provider fallback chain.
 

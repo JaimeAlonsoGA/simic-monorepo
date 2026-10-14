@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from huggingface_hub.errors import LocalEntryNotFoundError
+from pydantic import SecretStr
 
 from tapeback import _doctor
 from tapeback.cli import cli
@@ -177,6 +178,81 @@ def test_pending(tmp_vault, tmp_path):
     assert (check.outcome, check.detail) == (
         "warn",
         "not yet transcribed: 2026-10-12_09-00-00 — run 'tapeback recover'",
+    )
+
+
+# --- speakers and summary ---
+
+
+def _find_spec_without(*missing: str):
+    """importlib's find_spec on a machine without these packages: a missing parent
+    raises, a missing leaf returns None."""
+
+    def find_spec(name: str):
+        if name.split(".", maxsplit=1)[0] in missing:
+            if "." in name:
+                raise ModuleNotFoundError(f"No module named {name.split('.', maxsplit=1)[0]!r}")
+            return None
+        return SimpleNamespace(name=name)
+
+    return find_spec
+
+
+def test_speakers_off(tmp_vault):
+    check = _doctor._speakers(Settings(vault_path=tmp_vault, diarize=False))
+    assert (check.outcome, check.detail) == ("ok", "off")
+
+
+def test_speakers_without_pyannote(tmp_vault):
+    settings = Settings(vault_path=tmp_vault, hf_token=SecretStr("hf_x"))
+    with patch("tapeback._doctor.importlib.util.find_spec", _find_spec_without("pyannote")):
+        check = _doctor._speakers(settings)
+    assert (check.outcome, check.detail) == (
+        "warn",
+        "pyannote is not installed — install tapeback[diarize]",
+    )
+
+
+@pytest.mark.parametrize(
+    ("token", "outcome", "detail"),
+    [("", "warn", "no Hugging Face token — set TAPEBACK_HF_TOKEN"), ("hf_x", "ok", "pyannote")],
+)
+def test_speakers_need_a_token(tmp_vault, token, outcome, detail):
+    settings = Settings(vault_path=tmp_vault, hf_token=SecretStr(token))
+    with patch("tapeback._doctor.importlib.util.find_spec", _find_spec_without()):
+        check = _doctor._speakers(settings)
+    assert (check.outcome, check.detail) == (outcome, detail)
+
+
+def test_summary_off(tmp_vault):
+    check = _doctor._summary(Settings(vault_path=tmp_vault, summarize=False))
+    assert (check.outcome, check.detail) == ("ok", "off")
+
+
+def test_summary_without_a_key(tmp_vault):
+    check = _doctor._summary(Settings(vault_path=tmp_vault, llm_provider="gemini"))
+    assert (check.outcome, check.detail) == (
+        "warn",
+        "no API key for gemini — notes are saved without a summary",
+    )
+
+
+def test_summary_names_every_provider_it_would_try(tmp_vault, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "g-test")
+    settings = Settings(vault_path=tmp_vault, llm_api_key=SecretStr("sk-ant-test"))
+    with patch("tapeback._doctor.importlib.util.find_spec", _find_spec_without()):
+        check = _doctor._summary(settings)
+    assert (check.outcome, check.detail) == ("ok", "anthropic, then gemini")
+
+
+@pytest.mark.parametrize(("provider", "package"), [("anthropic", "anthropic"), ("groq", "openai")])
+def test_summary_needs_the_first_providers_package(tmp_vault, provider, package):
+    settings = Settings(vault_path=tmp_vault, llm_provider=provider, llm_api_key=SecretStr("key"))
+    with patch("tapeback._doctor.importlib.util.find_spec", _find_spec_without(package)):
+        check = _doctor._summary(settings)
+    assert (check.outcome, check.detail) == (
+        "warn",
+        f"{package} is not installed — install tapeback[llm]",
     )
 
 
