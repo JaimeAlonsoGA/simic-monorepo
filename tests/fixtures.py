@@ -28,11 +28,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _pyannote_available() -> bool:
+    """Whether pyannote is installed, without importing it. The import pulls in torch —
+    six seconds on a small laptop — and every process that imports this module paid it,
+    including the `tapeback start` that ctrl_c_in_terminal runs: its Ctrl+C then landed
+    in the middle of the import. A dotted name imports its parent, which raises rather
+    than returning None when the parent is missing."""
     try:
-        import pyannote.audio  # noqa: F401, PLC0415
-
-        return True
-    except ImportError:
+        return importlib.util.find_spec("pyannote.audio") is not None
+    except ModuleNotFoundError:
         return False
 
 
