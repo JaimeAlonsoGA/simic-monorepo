@@ -22,12 +22,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A desktop notification when the note is ready, or could not be made** (`notify-send`; `TAPEBACK_NOTIFY=false` turns it off). From `start`, `stop`, `recover`, `process` and the tray alike.
 - **`start` warns when the other side has been silent for three minutes**: a call playing on an output tapeback is not recording used to cost the whole meeting without a sign.
 - **`start` warns when the disk cannot hold two hours of meeting**, before the meeting rather than when the disk fills.
+- **`tapeback ui`: a window to record and set tapeback up.** One button records and stops; each recording is followed to its note — being transcribed and how far, waiting to be, then the transcripts newest first, five at a time, opening in Obsidian. A settings page covers the vault and its transcripts folder, the output and microphone recorded, the transcription engine, model, language and processor, speakers and the summary, each marked with what `doctor` says of it. Changes go straight to `~/.config/tapeback/.env`, so the window and the CLI never disagree. `tapeback ui --install` adds it to the applications menu. Needs PyGObject with GTK 4 and libadwaita from the system.
+- **`tapeback doctor` checks speakers and the summary**: pyannote and a Hugging Face token when diarization is on, an API key and the provider's package when summaries are. Either missing used to show only after a meeting, as a note without speakers or summary.
 
 ### Changed
 - Defaults: `TAPEBACK_SAMPLE_RATE=16000` (Whisper's rate), `TAPEBACK_DEVICE=cpu`, `TAPEBACK_VAULT_PATH=~/code/obsidian`.
 - Loudness normalisation runs one ffmpeg per channel, side by side: 44 s instead of 86 s per hour of meeting, byte-identical output.
 - **One transcription at a time.** Meetings stopped back to back wait their turn instead of loading two Whisper models at once, which ran a laptop out of memory.
 - **`tapeback stop` with nothing recording** says so, and points at `tapeback recover` when recordings wait to be transcribed, instead of a traceback.
+- **A transcripts or audio folder outside the vault is refused when settings load** (`TAPEBACK_MEETINGS_DIR`, `TAPEBACK_ATTACHMENTS_DIR`), not after the transcription, when the note was about to be written.
 
 ### Fixed
 - **An interrupted first model download no longer breaks every run after it.** A download cut short left the model without `model.bin`; the cache lookup accepted it, and each run failed with `Unable to open file 'model.bin'` until the cache was deleted by hand. tapeback now downloads what is missing.

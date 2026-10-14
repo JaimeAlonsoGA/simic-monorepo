@@ -522,6 +522,38 @@ def test_tray_missing_dependency(runner):
     assert "pystray" in result.output
 
 
+# --- ui command ---
+
+
+def test_ui_without_gtk_says_how_to_get_it(runner):
+    with patch.dict("sys.modules", {"tapeback.ui": None}):
+        result = runner.invoke(cli, ["ui"])
+
+    assert result.exit_code == 1
+    assert "sudo apt install python3-gi gir1.2-adw-1" in result.output
+
+
+def test_ui_install_adds_the_launcher(runner, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    with patch("tapeback._cli_gui.shutil.which", return_value="/opt/bin/tapeback"):
+        result = runner.invoke(cli, ["ui", "--install"])
+
+    launcher = tmp_path / "applications" / "io.github.jaimealonsoga.tapeback.desktop"
+    assert result.exit_code == 0
+    assert result.output == f"Added to the applications menu: {launcher}\n"
+    assert 'Exec="/opt/bin/tapeback" ui\n' in launcher.read_text()
+
+
+def test_ui_install_needs_tapeback_on_path(runner, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    with patch("tapeback._cli_gui.shutil.which", return_value=None):
+        result = runner.invoke(cli, ["ui", "--install"])
+
+    assert result.exit_code == 1
+    assert "tapeback is not on PATH" in result.output
+    assert not (tmp_path / "applications").exists()
+
+
 # --- remote STT runtime notice ---
 
 

@@ -21,6 +21,7 @@ Works with any video call platform: Google Meet, Zoom, Teams, Telegram, Discord,
 - **Stereo channel separation**: your mic (left) vs. others (right) for accurate "You" attribution
 - **Obsidian-native output**: Markdown with YAML frontmatter, a wikilink to the audio when it is kept
 - **LLM summarization**: Anthropic, OpenAI, Groq, Gemini, DeepSeek, OpenRouter, Qwen (with automatic provider fallback)
+- **A window**: `tapeback ui` records, follows each recording to its note and sets tapeback up — no terminal, no `.env` to edit
 - **System tray**: start/stop recording from the tray icon, no terminal needed
 - **CLI-first**: `tapeback start`, Ctrl+C to stop, done — the terminal is yours again at once; the note is made in the background, one meeting at a time
 
@@ -187,6 +188,41 @@ Open the **Extensions** app, enable **Ubuntu AppIndicators** (or
 affected session. See [issue #3](https://github.com/yastcher/tapeback/issues/3)
 for background.
 
+## Window
+
+```bash
+tapeback ui              # open it
+tapeback ui --install    # once: add tapeback to the applications menu
+```
+
+Two pages. **Record**: one button, the time, and every recording after it — being
+transcribed (with the stage it is at), not transcribed yet (one click finishes it), and
+the transcripts already written, newest first, five at a time. A transcript opens in
+Obsidian when it is installed, otherwise in the default app for `.md`. **Settings**:
+the vault and the folder inside it, which output and microphone are recorded, how it is
+transcribed, speakers, and the summary. Each section is marked with what `tapeback
+doctor` says of it, and a problem that would stop a recording shows as a banner on top.
+Light or dark and the accent colour follow the desktop.
+
+A change is saved the moment it is made, into `~/.config/tapeback/.env` — the file every
+command reads, so the window and the CLI always agree. Lines the window does not offer
+stay as they are. A setting fixed by a `TAPEBACK_*` environment variable is greyed out:
+the variable outranks the file. The window shows what the CLI keeps on disk, so a
+recording started in a terminal appears in it, and closing it stops nothing.
+
+It needs GTK 4 and libadwaita 1.4+ for Python, which come with the system Python rather
+than from PyPI:
+
+```bash
+sudo apt install python3-gi gir1.2-adw-1             # Debian / Ubuntu
+sudo dnf install python3-gobject libadwaita          # Fedora
+sudo pacman -S python-gobject libadwaita             # Arch
+```
+
+Install tapeback where it can see them: `pipx install --system-site-packages tapeback`,
+or a venv made with `python3 -m venv --system-site-packages`. The `.deb` and AUR packages
+bundle their own interpreter and do not ship the window yet.
+
 ## Speaker diarization
 
 Speaker diarization identifies who said what in the recording. Without it,
@@ -289,9 +325,10 @@ the tally to stderr, so `--show-masked > sent.txt` gives you something to diff.
 ## CLI reference
 
 ```
-tapeback doctor                    Check tools, audio sources, vault, disk and model before a meeting
+tapeback doctor                    Check tools, audio sources, vault, disk, model, speakers and summary before a meeting
 tapeback start [NAME]              Start recording (Ctrl+C to stop; transcribed in the background)
 tapeback stop                      Stop recording from another terminal
+tapeback ui [--install]            The window: record, follow transcriptions, settings
 tapeback tray                      System tray icon
 tapeback process <FILE> [--name N] Transcribe an existing audio file
 tapeback recover [NAME]            Transcribe recordings whose processing failed or was interrupted
@@ -377,8 +414,8 @@ All settings via environment variables (prefix `TAPEBACK_`) or
 | Variable | Default | Description |
 |---|---|---|
 | `TAPEBACK_VAULT_PATH` | `~/code/obsidian` | Path to output directory (Obsidian vault) |
-| `TAPEBACK_MEETINGS_DIR` | `meetings` | Subdirectory for meeting notes |
-| `TAPEBACK_ATTACHMENTS_DIR` | `attachments/audio` | Subdirectory for audio kept with `TAPEBACK_KEEP_AUDIO` |
+| `TAPEBACK_MEETINGS_DIR` | `meetings` | Subdirectory of the vault for transcripts; a path outside the vault is refused |
+| `TAPEBACK_ATTACHMENTS_DIR` | `attachments/audio` | Subdirectory of the vault for audio kept with `TAPEBACK_KEEP_AUDIO`; a path outside the vault is refused |
 
 ### Transcription
 

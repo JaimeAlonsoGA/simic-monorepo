@@ -7,6 +7,7 @@ import click
 
 from tapeback import const
 from tapeback._background import last_status, process_in_background
+from tapeback._cli_gui import tray, ui
 from tapeback._watch import CaptureWatch, SilenceWatch, wait_while_recording
 from tapeback.recorder import (
     NoActiveRecording,
@@ -61,6 +62,7 @@ def cli() -> None:
       tapeback start          # record (Ctrl+C to stop and transcribe)
       tapeback status         # what is recording and being transcribed
       tapeback process a.mp3  # transcribe existing file
+      tapeback ui             # the same in a window, with settings
 
     \b
     Configuration:
@@ -476,22 +478,5 @@ def doctor() -> None:
         raise SystemExit(1)
 
 
-@cli.command()
-def tray() -> None:
-    """Run tapeback as a system tray icon.
-
-    Provides a graphical interface for start/stop recording
-    without needing a terminal. Right-click the icon for the menu.
-
-    \b
-    Requires the tray extra:
-      uv pip install tapeback[tray]
-    """
-    try:
-        from tapeback.tray import run_tray
-    except ImportError:
-        raise click.ClickException(
-            "System tray requires pystray and Pillow. Install with: uv pip install tapeback[tray]"
-        ) from None
-
-    run_tray()
+cli.add_command(ui)
+cli.add_command(tray)
