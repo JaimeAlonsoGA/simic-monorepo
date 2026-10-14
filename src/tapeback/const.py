@@ -22,6 +22,10 @@ FILE_TRANSCRIBE_LOCK = ".transcribe.lock"
 # What a session processed in the background printed, kept in its directory.
 FILE_PROCESSING_LOG = "processing.log"
 
+# The desktop app's id: the window registers under it, and its launcher is named after
+# it, which is how the desktop matches the two.
+APP_ID = "io.github.jaimealonsoga.tapeback"
+
 # Where in-progress recordings live is not a constant: it depends on settings and
 # XDG_STATE_HOME, and is verified to be private before use. See recorder.session_root().
 

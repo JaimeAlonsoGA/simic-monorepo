@@ -25,6 +25,8 @@ dependencies = [
     # faster-whisper release that carries it.
     "av>=11,<19",
     "pydantic-settings>=2.0.0,<3",
+    # Comes with pydantic-settings; named because `tapeback ui` writes the .env with it.
+    "python-dotenv>=1.0.0,<2",
     "click>=8.0.0,<9",
 ]
 
@@ -99,6 +101,8 @@ max-args = 6  # Settings + 5 domain args is a common shape in this codebase
 # Lazy imports to keep CLI startup (--help, status) free of ~10s ML model load
 # (faster_whisper/torch are pulled in transitively from pipeline/live/tray).
 "src/tapeback/cli.py" = ["PLC0415"]
+# GTK and dbus-next are optional: imported only when `tapeback ui` / `tray` runs.
+"src/tapeback/_cli_gui.py" = ["PLC0415"]
 # pyannote.audio + torch are `[diarize]` extras — must import inside functions
 # so users without the extra don't get ImportError on module load.
 "src/tapeback/diarizer.py" = ["PLC0415"]
@@ -124,7 +128,9 @@ addopts = "--cov=tapeback --cov-report=term-missing"
 
 [tool.coverage.run]
 source = ["src/tapeback"]
-omit = ["src/tapeback/tray.py"]  # GUI module, requires X display — tested locally only
+# GUI modules, require a display — tested locally only. What they show and do lives in
+# _activity.py and _config.py, which are covered.
+omit = ["src/tapeback/tray.py", "src/tapeback/ui.py", "src/tapeback/_ui_settings.py"]
 
 [tool.coverage.report]
 show_missing = true

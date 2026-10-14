@@ -194,3 +194,21 @@ def test_live_min_chunk_gt_interval_allowed_when_live_disabled(tmp_vault):
     """The chunk/interval check only applies when live transcription is enabled."""
     s = Settings(vault_path=tmp_vault, live=False, live_interval=10, live_min_chunk=30.0)
     assert s.live is False
+
+
+@pytest.mark.parametrize("value", ["", "  ", "/home/user/notes", "../outside", "notes/../../up"])
+def test_vault_subfolder_outside_the_vault_is_refused(value):
+    """A folder that escapes the vault is refused when settings load, not when a
+    transcript that took an hour to make is about to be written."""
+    with pytest.raises(ValidationError, match="folder inside the vault"):
+        Settings(meetings_dir=value)
+    with pytest.raises(ValidationError, match="folder inside the vault"):
+        Settings(attachments_dir=value)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("transcripts", "transcripts"), (" Voice notes/ ", "Voice notes"), ("a/b", "a/b")],
+)
+def test_vault_subfolder_inside_the_vault_is_kept(value, expected):
+    assert Settings(meetings_dir=value).meetings_dir == expected

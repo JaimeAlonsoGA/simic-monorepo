@@ -43,11 +43,14 @@ DEFAULT_LOCAL_STT_MODEL = "large-v3-turbo"
 # Switch to gpt-transcribe or gpt-4o-transcribe-diarize via TAPEBACK_STT_MODEL.
 DEFAULT_REMOTE_STT_MODEL = "whisper-1"
 
+# The user's own configuration: read below, written by `tapeback ui`.
+USER_ENV_FILE = Path.home() / ".config" / "tapeback" / ".env"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="TAPEBACK_",
-        env_file=(Path.home() / ".config" / "tapeback" / ".env", ".env"),
+        env_file=(USER_ENV_FILE, ".env"),
         env_file_encoding="utf-8",
         populate_by_name=True,
     )
@@ -305,6 +308,17 @@ class Settings(BaseSettings):
                 "use an IANA name such as Europe/Madrid or UTC"
             ) from exc
         return value
+
+    @field_validator("meetings_dir", "attachments_dir")
+    @classmethod
+    def _validate_vault_subfolder(cls, value: str) -> str:
+        """Refuse a folder outside the vault when settings load. vault.py refuses to
+        write there too, but only once a transcript that took an hour is ready."""
+        stripped = value.strip()
+        folder = Path(stripped)
+        if not stripped or folder.is_absolute() or ".." in folder.parts:
+            raise ValueError(f"{value!r} is not a folder inside the vault")
+        return folder.as_posix()
 
     @model_validator(mode="after")
     def _validate_live_chunking(self) -> Self:

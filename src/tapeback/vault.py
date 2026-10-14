@@ -3,10 +3,16 @@
 import os
 import shutil
 from pathlib import Path
+from urllib.parse import quote
 
 from tapeback.audio import transcode_to_mp3
 from tapeback.recorder import validate_session_name
 from tapeback.settings import Settings
+
+
+def obsidian_uri(note: Path) -> str:
+    """A link that opens the note in Obsidian, which finds its vault from the path."""
+    return f"obsidian://open?path={quote(str(note), safe='')}"
 
 
 def _unique_path(path: Path) -> Path:

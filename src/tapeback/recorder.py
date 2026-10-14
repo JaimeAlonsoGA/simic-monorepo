@@ -397,7 +397,7 @@ class Recorder:
         exactly one owns the recording and the other gets NoActiveRecording. Then the
         recorders get SIGTERM, and the encoders the time to flush once their input ends.
         """
-        session = self._read_session()
+        session = self.read_session()
         if session is None:
             raise NoActiveRecording("No recording in progress.")
         try:
@@ -429,22 +429,22 @@ class Recorder:
         `tapeback start` then read the missing session as a peer `tapeback stop` and
         returned without transcribing anything.
         """
-        session = self._read_session()
+        session = self.read_session()
         return session is not None and not _stopped_channels(session)
 
     def stopped_channels(self) -> list[str]:
         """Channels whose capture exited on its own. Empty without a session."""
-        session = self._read_session()
+        session = self.read_session()
         return [] if session is None else _stopped_channels(session)
 
     def get_session_info(self) -> SessionData | None:
         """Return session info dict if recording, else None."""
-        return self._read_session() if self.is_recording() else None
+        return self.read_session() if self.is_recording() else None
 
     def leftover_sessions(self, settings: Settings) -> list[Path]:
         """Session directories nothing owns: not recording, not being processed — the
         meetings whose processing failed or was interrupted. Oldest name first."""
-        session = self._read_session()
+        session = self.read_session()
         active = session["session_name"] if session else None
         root = session_root(settings)
         return sorted(
@@ -457,7 +457,8 @@ class Recorder:
         root = session_root(settings)
         return sorted(p for p in root.iterdir() if p.is_dir() and _being_processed(p))
 
-    def _read_session(self) -> SessionData | None:
+    def read_session(self) -> SessionData | None:
+        """The session as started, whether or not its recorders still run."""
         try:
             session: SessionData = json.loads(self._session_file.read_text())
         except (FileNotFoundError, json.JSONDecodeError):
