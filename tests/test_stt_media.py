@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tapeback import const
-from tapeback._stt_media import (
+from simic import const
+from simic._stt_media import (
     _check_ffmpeg,
     _encode_mp3,
     _max_chunk_seconds,
@@ -31,7 +31,7 @@ def test_max_chunk_seconds_matches_const_formula():
 
 def test_check_ffmpeg_missing_raises():
     with (
-        patch("tapeback._stt_media.shutil.which", return_value=None),
+        patch("simic._stt_media.shutil.which", return_value=None),
         pytest.raises(RuntimeError, match="ffmpeg not found"),
     ):
         _check_ffmpeg()
@@ -59,8 +59,8 @@ def test_encode_mp3_failure_raises(tmp_path):
     mp3 = tmp_path / "out.mp3"
     failed = MagicMock(returncode=1, stderr=b"boom")
     with (
-        patch("tapeback._stt_media._check_ffmpeg"),
-        patch("tapeback._stt_media.subprocess.run", return_value=failed),
+        patch("simic._stt_media._check_ffmpeg"),
+        patch("simic._stt_media.subprocess.run", return_value=failed),
         pytest.raises(RuntimeError, match="ffmpeg failed while encoding MP3"),
     ):
         _encode_mp3(src, mp3, timeout=30.0)
@@ -71,9 +71,9 @@ def test_encode_mp3_timeout_raises(tmp_path):
     create_silent_wav(src, duration=0.5, sample_rate=16000)
     mp3 = tmp_path / "out.mp3"
     with (
-        patch("tapeback._stt_media._check_ffmpeg"),
+        patch("simic._stt_media._check_ffmpeg"),
         patch(
-            "tapeback._stt_media.subprocess.run",
+            "simic._stt_media.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="ffmpeg", timeout=1.0),
         ),
         pytest.raises(RuntimeError, match="ffmpeg timed out"),

@@ -1,20 +1,18 @@
-"""Transcription after the terminal is given back: the detached `tapeback recover`, what
-`tapeback status` shows of it, and the queue that keeps two from running at once."""
+"""Transcription after the terminal is given back: the detached `simic recover`, what
+`simic status` shows of it, and the queue that keeps two from running at once."""
 
 import os
 import threading
 
-from tapeback._background import last_status, process_in_background
-from tapeback.cli import cli
-from tapeback.recorder import processing, session_root, transcription_turn
-from tapeback.settings import Settings
+from simic._background import last_status, process_in_background
+from simic.cli import cli
+from simic.recorder import processing, session_root, transcription_turn
+from simic.settings import Settings
 
 SESSION = "2026-10-13_09-00-00"
 
 
-def test_the_detached_process_is_tapeback_recover_and_writes_its_log(
-    tmp_path, vault_env, monkeypatch
-):
+def test_the_detached_process_is_simic_recover_and_writes_its_log(tmp_path, vault_env, monkeypatch):
     """A real child, run as the user's would be. A session without audio fails at its
     first step, before any model loads, which is enough to see the whole handoff: the
     command the child runs, where its output goes, and that a failure keeps the
@@ -91,7 +89,7 @@ def test_status_shows_how_far_a_background_transcription_has_got(runner, vault_e
 
 
 def test_status_names_a_foreground_transcription_without_progress(runner, vault_env):
-    """`tapeback start --wait` prints its progress to its own terminal, not to a log."""
+    """`simic start --wait` prints its progress to its own terminal, not to a log."""
     session = session_root(Settings()) / SESSION
     session.mkdir()
 

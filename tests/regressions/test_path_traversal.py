@@ -1,15 +1,15 @@
 """Regression tests for path-traversal vulnerabilities.
 
-Bug: `tapeback process --name "../../etc/passwd"` bypassed the session-name
+Bug: `simic process --name "../../etc/passwd"` bypassed the session-name
 regex check (which only `recorder.start` enforced) and let `save_audio_to_vault`
 / `save_markdown_to_vault` write files outside the vault root.
 """
 
 import pytest
 
-from tapeback.pipeline import process_file
-from tapeback.settings import Settings
-from tapeback.vault import save_audio_to_vault, save_markdown_to_vault
+from simic.pipeline import process_file
+from simic.settings import Settings
+from simic.vault import save_audio_to_vault, save_markdown_to_vault
 from tests.fixtures import create_mono_wav
 
 

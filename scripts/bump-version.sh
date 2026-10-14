@@ -71,7 +71,7 @@ echo "  pyproject.toml → $NEW"
 # through `uv lock`, which would also re-resolve every dependency: anchored on the
 # package NAME and applied to the line after it, so a dependency sitting on the
 # same number is never touched.
-sed -i '/^name = "tapeback"$/{n;s/^version = ".*"$/version = "'"$NEW"'"/}' uv.lock
+sed -i '/^name = "si-mic"$/{n;s/^version = ".*"$/version = "'"$NEW"'"/}' uv.lock
 echo "  uv.lock → $NEW"
 
 # Tracked PKGBUILDs only: packaging/src and packaging/pkg are makepkg's build
@@ -85,7 +85,7 @@ done < <(git ls-files -- 'packaging/PKGBUILD' 'packaging/*/PKGBUILD')
 # scripts/release_from_tag.py checks: the release URL and the package file names.
 sed -i -E \
   -e "s#(releases/download/v)[0-9]+\.[0-9]+\.[0-9]+/#\1$NEW/#g" \
-  -e "s#(tapeback(-[a-z]+)?_)[0-9]+\.[0-9]+\.[0-9]+_#\1${NEW}_#g" \
+  -e "s#(simic(-[a-z]+)?_)[0-9]+\.[0-9]+\.[0-9]+_#\1${NEW}_#g" \
   README.md
 echo "  README.md → $NEW"
 

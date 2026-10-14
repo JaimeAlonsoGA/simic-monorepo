@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from huggingface_hub.errors import LocalEntryNotFoundError
 
-from tapeback._device import resolve_compute_type
-from tapeback.transcriber import Transcriber
+from simic._device import resolve_compute_type
+from simic.transcriber import Transcriber
 
 
 @pytest.mark.parametrize(
@@ -25,7 +25,7 @@ from tapeback.transcriber import Transcriber
         # clip and half the VRAM, with no quality cost.
         pytest.param("auto", "cuda", "int8_float16", id="auto_cuda"),
         # A GPU-only type must be translated when we end up on the CPU: ctranslate2
-        # raises ValueError rather than degrading, so carrying TAPEBACK_COMPUTE_TYPE
+        # raises ValueError rather than degrading, so carrying SIMIC_COMPUTE_TYPE
         # across a thermal or VRAM fallback used to crash the run.
         pytest.param("int8_float16", "cpu", "int8", id="gpu_only_type_on_cpu"),
         pytest.param("float16", "cpu", "int8", id="float16_on_cpu"),
@@ -76,7 +76,7 @@ def test_transcribe_stereo_pipeline(settings):
     mock_info.language_probability = 0.99
     mock_info.duration = 5.0
 
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         # Monitor is transcribed FIRST so its detected language can be reused for the
         # gated mic channel — see tests/regressions/test_language_detection.py.
@@ -113,7 +113,7 @@ def test_transcribe_stereo_pipeline(settings):
 
 def test_load_model_prefers_local_cache(settings):
     """Model load tries the local cache first — no HuggingFace round-trip per start."""
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         Transcriber(settings)
 
     assert mock_model_cls.call_count == 1
@@ -123,7 +123,7 @@ def test_load_model_prefers_local_cache(settings):
 @pytest.mark.parametrize("threads", [0, 6])
 def test_model_decodes_with_the_configured_cpu_threads(settings, threads):
     settings = settings.model_copy(update={"cpu_threads": threads})
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         Transcriber(settings)
 
     assert mock_model_cls.call_args.kwargs["cpu_threads"] == threads
@@ -132,7 +132,7 @@ def test_model_decodes_with_the_configured_cpu_threads(settings, threads):
 def test_load_model_downloads_when_not_cached(settings):
     """If the model isn't cached, fall back to a network download (local_files_only=False)."""
     instance = MagicMock()
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         mock_model_cls.side_effect = [LocalEntryNotFoundError("not cached"), instance]
         transcriber = Transcriber(settings)
 
@@ -155,7 +155,7 @@ def test_transcribe_stereo_reports_per_channel_timings(settings):
     mon_seg.start, mon_seg.end, mon_seg.text, mon_seg.words = 0.0, 2.0, "theirs", []
 
     messages: list[str] = []
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.side_effect = [
             (iter([mic_seg]), mock_info),
@@ -183,7 +183,7 @@ def test_transcribe_passes_language_and_hallucination_settings(settings):
     info = MagicMock()
     info.language, info.language_probability, info.duration = "en", 0.9, 1.0
 
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.return_value = (iter([]), info)
 
@@ -201,7 +201,7 @@ def test_transcribe_passes_beam_size_and_temperature(settings):
     info = MagicMock()
     info.language, info.language_probability, info.duration = "en", 0.9, 1.0
 
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.return_value = (iter([]), info)
 
@@ -219,8 +219,8 @@ def test_batched_inference_used_when_batch_size_positive(settings):
     info.language, info.language_probability, info.duration = "en", 0.9, 1.0
 
     with (
-        patch("tapeback.transcriber.WhisperModel") as mock_model_cls,
-        patch("tapeback.transcriber.BatchedInferencePipeline") as mock_batched_cls,
+        patch("simic.transcriber.WhisperModel") as mock_model_cls,
+        patch("simic.transcriber.BatchedInferencePipeline") as mock_batched_cls,
     ):
         batched = mock_batched_cls.return_value
         batched.transcribe.return_value = (iter([]), info)
@@ -237,7 +237,7 @@ def test_hotwords_reach_whisper_when_configured(settings):
     info = MagicMock()
     info.language, info.language_probability, info.duration = "ru", 0.9, 1.0
 
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.return_value = (iter([]), info)
 
@@ -249,7 +249,7 @@ def test_hotwords_reach_whisper_when_configured(settings):
 def test_default_hotwords_cover_the_terms_the_model_mangles(settings):
     """The shipped glossary must contain the vocabulary that measurably failed."""
     glossary = settings.hotwords.lower()
-    for term in ("tapeback", "whisper", "obsidian", "llm", "rag", "onnx", "jira"):
+    for term in ("simic", "whisper", "obsidian", "llm", "rag", "onnx", "jira"):
         assert term in glossary, term
 
 
@@ -259,7 +259,7 @@ def test_hotwords_omitted_when_empty(settings):
     info = MagicMock()
     info.language, info.language_probability, info.duration = "ru", 0.9, 1.0
 
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.return_value = (iter([]), info)
 
@@ -279,13 +279,13 @@ def test_batching_warns_which_settings_it_drops(settings, capsys):
         }
     )
     with (
-        patch("tapeback.transcriber.WhisperModel"),
-        patch("tapeback.transcriber.BatchedInferencePipeline"),
+        patch("simic.transcriber.WhisperModel"),
+        patch("simic.transcriber.BatchedInferencePipeline"),
     ):
         Transcriber(s)
 
     warning = capsys.readouterr().err
-    assert "TAPEBACK_BATCH_SIZE=8" in warning
+    assert "SIMIC_BATCH_SIZE=8" in warning
     assert "no_speech_threshold" in warning
     assert "condition_on_previous_text" in warning
     assert "temperature (only the first value is used)" in warning
@@ -296,10 +296,10 @@ def test_batching_warns_which_settings_it_drops(settings, capsys):
 
 def test_no_batching_warning_when_batching_is_off(settings, capsys):
     s = settings.model_copy(update={"device": "cpu", "batch_size": 0})
-    with patch("tapeback.transcriber.WhisperModel"):
+    with patch("simic.transcriber.WhisperModel"):
         Transcriber(s)
 
-    assert "TAPEBACK_BATCH_SIZE" not in capsys.readouterr().err
+    assert "SIMIC_BATCH_SIZE" not in capsys.readouterr().err
 
 
 def test_describe_reports_resolved_device_and_compute_type(settings):
@@ -312,7 +312,7 @@ def test_describe_reports_resolved_device_and_compute_type(settings):
             "batch_size": 0,
         }
     )
-    with patch("tapeback.transcriber.WhisperModel"):
+    with patch("simic.transcriber.WhisperModel"):
         description = Transcriber(s).describe()
 
     assert description == "Whisper: large-v3 on cpu/int8"
@@ -324,8 +324,8 @@ def test_describe_mentions_batch_size_when_batching_enabled(settings):
         update={"device": "cpu", "compute_type": "int8", "stt_model": "tiny", "batch_size": 8}
     )
     with (
-        patch("tapeback.transcriber.WhisperModel"),
-        patch("tapeback.transcriber.BatchedInferencePipeline"),
+        patch("simic.transcriber.WhisperModel"),
+        patch("simic.transcriber.BatchedInferencePipeline"),
     ):
         description = Transcriber(s).describe()
 
@@ -338,7 +338,7 @@ def test_describe_reflects_cpu_fallback_after_cuda_failure(settings):
     info = MagicMock()
     info.language, info.language_probability, info.duration = "en", 0.9, 1.0
 
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.side_effect = [
             RuntimeError("CUDA failed with error out of memory"),
@@ -365,12 +365,12 @@ def test_transcribe_reports_progress_through_on_status(settings):
         segs.append(seg)
 
     messages: list[str] = []
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.return_value = (iter(segs), info)
         # min_interval defaults to 10s of wall clock; a fake clock makes every
         # segment clear the gap so the mapping position -> percent is testable.
-        with patch("tapeback._timing.time.monotonic", side_effect=[0.0, 100.0, 200.0, 300.0]):
+        with patch("simic._timing.time.monotonic", side_effect=[0.0, 100.0, 200.0, 300.0]):
             Transcriber(s).transcribe(
                 Path("/fake/audio.wav"), stage="transcribe mic", on_status=messages.append
             )
@@ -390,7 +390,7 @@ def test_transcribe_progress_silent_by_default(settings):
     seg = MagicMock()
     seg.start, seg.end, seg.text, seg.words = 0.0, 60.0, "text", []
 
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.return_value = (iter([seg]), info)
         segments, _info = Transcriber(s).transcribe(Path("/fake/audio.wav"))
@@ -405,8 +405,8 @@ def test_plain_inference_when_batch_size_zero(settings):
     info.language, info.language_probability, info.duration = "en", 0.9, 1.0
 
     with (
-        patch("tapeback.transcriber.WhisperModel") as mock_model_cls,
-        patch("tapeback.transcriber.BatchedInferencePipeline") as mock_batched_cls,
+        patch("simic.transcriber.WhisperModel") as mock_model_cls,
+        patch("simic.transcriber.BatchedInferencePipeline") as mock_batched_cls,
     ):
         instance = mock_model_cls.return_value
         instance.transcribe.return_value = (iter([]), info)

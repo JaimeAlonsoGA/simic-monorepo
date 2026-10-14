@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for taking the time. tapeback records meeting audio on Linux, transcribes it
+Thanks for taking the time. simic records meeting audio on Linux, transcribes it
 locally with faster-whisper, and writes markdown to an Obsidian vault.
 
 ## Setup
@@ -8,8 +8,8 @@ locally with faster-whisper, and writes markdown to an Obsidian vault.
 Requires Python 3.13+, [uv](https://docs.astral.sh/uv/), and `ffmpeg` on `PATH`.
 
 ```bash
-git clone https://github.com/yastcher/tapeback
-cd tapeback
+git clone https://github.com/JaimeAlonsoGA/simic-monorepo
+cd simic-monorepo
 uv sync --group dev
 ```
 
@@ -58,7 +58,7 @@ and Arch packages in containers, as CI does — that needs docker and
 - **Fixtures live in `tests/fixtures.py`**, never in a test file. Regression tests for a
   specific bug go in `tests/regressions/`.
 - **No magic numbers.** Thresholds, limits and ratios belong in `settings.py` as a
-  `TAPEBACK_` setting, or in `const.py` — not as an inline literal or a default argument.
+  `SIMIC_` setting, or in `const.py` — not as an inline literal or a default argument.
 - **No local imports inside functions**, except where an optional extra requires it
   (see `diarizer.py` and `summarizer.py` for the pattern and the `noqa` that documents it).
 - Everything committed is in English — code, comments, logs, docs, commit messages.
@@ -85,7 +85,7 @@ Arch container.
 
 ## Reporting a bug
 
-Include the tapeback version, distro, whether audio came from PulseAudio or PipeWire,
+Include the simic version, distro, whether audio came from PulseAudio or PipeWire,
 and the GPU if transcription is involved. For a slow or stalled run, attach the run
-record from `~/.local/share/tapeback/runs/` — it holds the settings the run used, its
+record from `~/.local/share/simic/runs/` — it holds the settings the run used, its
 status lines and its outcome, and never contains credentials.

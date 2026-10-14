@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from tapeback._isolated import WorkerFailed, job_settings, transcribe_isolated
-from tapeback._worker import EVENT_INFO, EVENT_SEGMENT, EVENT_STATUS, emit
-from tapeback._worker import main as worker_main
+from simic._isolated import WorkerFailed, job_settings, transcribe_isolated
+from simic._worker import EVENT_INFO, EVENT_SEGMENT, EVENT_STATUS, emit
+from simic._worker import main as worker_main
 
 
 class _FakeProcess:
@@ -63,7 +63,7 @@ def spawn(monkeypatch):
     def _install(lines: list[str], returncode: int = 0) -> _FakeProcess:
         process = _FakeProcess(lines, returncode)
         holder["process"] = process
-        monkeypatch.setattr("tapeback._isolated.subprocess.Popen", lambda *_a, **_k: process)
+        monkeypatch.setattr("simic._isolated.subprocess.Popen", lambda *_a, **_k: process)
         return process
 
     return _install
@@ -139,7 +139,7 @@ def test_worker_killed_by_the_system_says_out_of_memory(settings, spawn):
 
     assert str(raised.value) == (
         "transcription worker was killed by the system, most likely for running out of "
-        "memory — close other programs, or set a smaller TAPEBACK_STT_MODEL"
+        "memory — close other programs, or set a smaller SIMIC_STT_MODEL"
     )
 
 

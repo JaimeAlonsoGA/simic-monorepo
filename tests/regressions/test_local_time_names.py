@@ -2,7 +2,7 @@
 
 The session name becomes the note's file name and its `date` and `time`, so a meeting
 at 08:30 in Tokyo was filed as 23:30 on the previous day. Names now follow
-TAPEBACK_TIMEZONE, or the machine's own zone when it is unset.
+SIMIC_TIMEZONE, or the machine's own zone when it is unset.
 """
 
 import datetime
@@ -11,8 +11,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from tapeback.recorder import Recorder
-from tapeback.settings import Settings
+from simic.recorder import Recorder
+from simic.settings import Settings
 
 # 23:30 UTC: the UTC date and the local date differ, which is the bug's whole effect.
 _INSTANT = datetime.datetime(2026, 10, 5, 23, 30, tzinfo=datetime.UTC)

@@ -1,4 +1,4 @@
-"""`tapeback doctor`: each check's outcomes, and the command's verdict."""
+"""`simic doctor`: each check's outcomes, and the command's verdict."""
 
 import subprocess
 from types import SimpleNamespace
@@ -8,9 +8,9 @@ import pytest
 from huggingface_hub.errors import LocalEntryNotFoundError
 from pydantic import SecretStr
 
-from tapeback import _doctor
-from tapeback.cli import cli
-from tapeback.settings import Settings
+from simic import _doctor
+from simic.cli import cli
+from simic.settings import Settings
 
 
 def _run(stdout: str = "", returncode: int = 0):
@@ -21,7 +21,7 @@ def _run(stdout: str = "", returncode: int = 0):
 
 
 def test_tools_missing(tmp_vault):
-    with patch("tapeback._doctor.shutil.which", side_effect=lambda t: None if t == "pactl" else t):
+    with patch("simic._doctor.shutil.which", side_effect=lambda t: None if t == "pactl" else t):
         check = _doctor._tools(Settings(vault_path=tmp_vault))
     assert check.outcome == "fail"
     assert check.detail.startswith("missing pactl — ")
@@ -33,16 +33,16 @@ def test_tools_missing(tmp_vault):
 )
 def test_tools_need_an_mp3_encoder_for_mp3_capture(tmp_vault, encoders, outcome):
     with (
-        patch("tapeback._doctor.shutil.which", side_effect=lambda t: t),
-        patch("tapeback._doctor.subprocess.run", return_value=_run(encoders)),
+        patch("simic._doctor.shutil.which", side_effect=lambda t: t),
+        patch("simic._doctor.subprocess.run", return_value=_run(encoders)),
     ):
         assert _doctor._tools(Settings(vault_path=tmp_vault)).outcome == outcome
 
 
 def test_tools_for_wav_capture_do_not_ask_ffmpeg(tmp_vault):
     with (
-        patch("tapeback._doctor.shutil.which", side_effect=lambda t: t),
-        patch("tapeback._doctor.subprocess.run") as run,
+        patch("simic._doctor.shutil.which", side_effect=lambda t: t),
+        patch("simic._doctor.subprocess.run") as run,
     ):
         check = _doctor._tools(Settings(vault_path=tmp_vault, audio_format="wav"))
     assert (check.outcome, check.detail) == ("ok", "parecord, pactl, ffmpeg")
@@ -68,15 +68,15 @@ _NO_SERVER = "no PulseAudio/PipeWire server answers — is the session's audio s
 )
 def test_sound_server(tmp_vault, result, expected):
     with (
-        patch("tapeback._doctor.shutil.which", return_value="/usr/bin/pactl"),
-        patch("tapeback._doctor.subprocess.run", return_value=result),
+        patch("simic._doctor.shutil.which", return_value="/usr/bin/pactl"),
+        patch("simic._doctor.subprocess.run", return_value=result),
     ):
         check = _doctor._sound_server(Settings(vault_path=tmp_vault))
     assert (check.outcome, check.detail) == expected
 
 
 def test_sound_server_without_pactl(tmp_vault):
-    with patch("tapeback._doctor.shutil.which", return_value=None):
+    with patch("simic._doctor.shutil.which", return_value=None):
         assert _doctor._sound_server(Settings(vault_path=tmp_vault)).outcome == "fail"
 
 
@@ -90,7 +90,7 @@ def test_sources(tmp_vault):
 
 def test_sources_not_found(tmp_vault):
     with patch(
-        "tapeback._doctor.detect_devices",
+        "simic._doctor.detect_devices",
         side_effect=subprocess.CalledProcessError(1, ["pactl"]),
     ):
         assert _doctor._sources(Settings(vault_path=tmp_vault)).outcome == "fail"
@@ -113,7 +113,7 @@ def test_vault_states(tmp_path):
     [(1_039_999_999, "warn", 1), (1_040_000_000, "ok", 2), (52_000_000_000, "ok", 100)],
 )
 def test_disk_counts_hours_of_meetings(tmp_vault, free, outcome, hours):
-    with patch("tapeback._doctor.shutil.disk_usage", return_value=SimpleNamespace(free=free)):
+    with patch("simic._doctor.shutil.disk_usage", return_value=SimpleNamespace(free=free)):
         check = _doctor._disk(Settings(vault_path=tmp_vault))
     assert check.outcome == outcome
     assert f"(about {hours} hours of meetings)" in check.detail
@@ -131,35 +131,35 @@ def test_disk_refuses_a_shared_sessions_dir(tmp_path):
 
 
 def test_model_not_downloaded(tmp_vault):
-    with patch("tapeback._doctor.download_model", side_effect=LocalEntryNotFoundError("x")):
+    with patch("simic._doctor.download_model", side_effect=LocalEntryNotFoundError("x")):
         check = _doctor._model(Settings(vault_path=tmp_vault))
     assert check.outcome == "warn"
     assert check.detail.startswith("large-v3-turbo is not downloaded yet")
 
 
 def test_model_partly_downloaded(tmp_vault, tmp_path):
-    with patch("tapeback._doctor.download_model", return_value=str(tmp_path)):
+    with patch("simic._doctor.download_model", return_value=str(tmp_path)):
         check = _doctor._model(Settings(vault_path=tmp_vault))
     assert check.outcome == "warn"
 
 
 def test_model_ready(tmp_vault, tmp_path):
     (tmp_path / "model.bin").write_bytes(b"")
-    with patch("tapeback._doctor.download_model", return_value=str(tmp_path)):
+    with patch("simic._doctor.download_model", return_value=str(tmp_path)):
         check = _doctor._model(Settings(vault_path=tmp_vault))
     assert (check.outcome, check.detail) == ("ok", "large-v3-turbo on cpu")
 
 
 def test_model_from_a_local_directory(tmp_vault, tmp_path):
     (tmp_path / "model.bin").write_bytes(b"")
-    with patch("tapeback._doctor.download_model") as download:
+    with patch("simic._doctor.download_model") as download:
         check = _doctor._model(Settings(vault_path=tmp_vault, stt_model=str(tmp_path)))
     assert check.outcome == "ok"
     download.assert_not_called()
 
 
 def test_model_unknown_name(tmp_vault):
-    with patch("tapeback._doctor.download_model", side_effect=ValueError("Invalid model size")):
+    with patch("simic._doctor.download_model", side_effect=ValueError("Invalid model size")):
         assert _doctor._model(Settings(vault_path=tmp_vault, stt_model="huge")).outcome == "fail"
 
 
@@ -177,7 +177,7 @@ def test_pending(tmp_vault, tmp_path):
     check = _doctor._pending(settings)
     assert (check.outcome, check.detail) == (
         "warn",
-        "not yet transcribed: 2026-10-12_09-00-00 — run 'tapeback recover'",
+        "not yet transcribed: 2026-10-12_09-00-00 — run 'simic recover'",
     )
 
 
@@ -205,21 +205,21 @@ def test_speakers_off(tmp_vault):
 
 def test_speakers_without_pyannote(tmp_vault):
     settings = Settings(vault_path=tmp_vault, hf_token=SecretStr("hf_x"))
-    with patch("tapeback._doctor.importlib.util.find_spec", _find_spec_without("pyannote")):
+    with patch("simic._doctor.importlib.util.find_spec", _find_spec_without("pyannote")):
         check = _doctor._speakers(settings)
     assert (check.outcome, check.detail) == (
         "warn",
-        "pyannote is not installed — install tapeback[diarize]",
+        "pyannote is not installed — install si-mic[diarize]",
     )
 
 
 @pytest.mark.parametrize(
     ("token", "outcome", "detail"),
-    [("", "warn", "no Hugging Face token — set TAPEBACK_HF_TOKEN"), ("hf_x", "ok", "pyannote")],
+    [("", "warn", "no Hugging Face token — set SIMIC_HF_TOKEN"), ("hf_x", "ok", "pyannote")],
 )
 def test_speakers_need_a_token(tmp_vault, token, outcome, detail):
     settings = Settings(vault_path=tmp_vault, hf_token=SecretStr(token))
-    with patch("tapeback._doctor.importlib.util.find_spec", _find_spec_without()):
+    with patch("simic._doctor.importlib.util.find_spec", _find_spec_without()):
         check = _doctor._speakers(settings)
     assert (check.outcome, check.detail) == (outcome, detail)
 
@@ -240,7 +240,7 @@ def test_summary_without_a_key(tmp_vault):
 def test_summary_names_every_provider_it_would_try(tmp_vault, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "g-test")
     settings = Settings(vault_path=tmp_vault, llm_api_key=SecretStr("sk-ant-test"))
-    with patch("tapeback._doctor.importlib.util.find_spec", _find_spec_without()):
+    with patch("simic._doctor.importlib.util.find_spec", _find_spec_without()):
         check = _doctor._summary(settings)
     assert (check.outcome, check.detail) == ("ok", "anthropic, then gemini")
 
@@ -248,11 +248,11 @@ def test_summary_names_every_provider_it_would_try(tmp_vault, monkeypatch):
 @pytest.mark.parametrize(("provider", "package"), [("anthropic", "anthropic"), ("groq", "openai")])
 def test_summary_needs_the_first_providers_package(tmp_vault, provider, package):
     settings = Settings(vault_path=tmp_vault, llm_provider=provider, llm_api_key=SecretStr("key"))
-    with patch("tapeback._doctor.importlib.util.find_spec", _find_spec_without(package)):
+    with patch("simic._doctor.importlib.util.find_spec", _find_spec_without(package)):
         check = _doctor._summary(settings)
     assert (check.outcome, check.detail) == (
         "warn",
-        f"{package} is not installed — install tapeback[llm]",
+        f"{package} is not installed — install si-mic[llm]",
     )
 
 
@@ -265,7 +265,7 @@ def test_doctor_prints_every_check_and_fails_only_on_failure(runner, vault_env, 
         _doctor.Check("Tools", "ok", "parecord, pactl, ffmpeg with MP3"),
         _doctor.Check("Model", outcome, "large-v3-turbo is not downloaded yet"),
     ]
-    with patch("tapeback._doctor.run_checks", return_value=checks):
+    with patch("simic._doctor.run_checks", return_value=checks):
         result = runner.invoke(cli, ["doctor"])
 
     assert result.exit_code == exit_code

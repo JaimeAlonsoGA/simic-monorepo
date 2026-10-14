@@ -2,7 +2,7 @@
 
 import pytest
 
-from tapeback._timing import (
+from simic._timing import (
     ProgressReporter,
     format_remaining,
     format_stage_duration,

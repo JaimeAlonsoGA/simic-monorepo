@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tapeback import _resume
-from tapeback.models import Segment, Word
-from tapeback.transcriber import Transcriber
+from simic import _resume
+from simic.models import Segment, Word
+from simic.transcriber import Transcriber
 
 
 @pytest.fixture
@@ -115,7 +115,7 @@ def test_corrupt_entry_is_ignored(cached_settings, audio, tmp_path):
 def test_second_run_reuses_the_first(cached_settings, audio):
     """The point: an interrupted run must not redo a channel it already finished."""
     messages: list[str] = []
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.return_value = (
             iter([_whisper_segment(0.0, 5.0, "готово")]),
@@ -141,7 +141,7 @@ def test_partial_results_are_not_cached(cached_settings, audio, tmp_path):
         yield _whisper_segment(0.0, 5.0, "начало")
         raise KeyboardInterrupt
 
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.return_value = (_interrupting(), _info())
         segments, info = Transcriber(cached_settings).transcribe(audio, stage="transcribe")
@@ -155,7 +155,7 @@ def test_cache_can_be_disabled(settings, audio, tmp_path):
     s = settings.model_copy(
         update={"device": "cpu", "resume_cache": False, "resume_cache_dir": tmp_path / "resume"}
     )
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.return_value = (iter([_whisper_segment(0.0, 5.0, "x")]), _info())
         Transcriber(s).transcribe(audio)
@@ -180,4 +180,4 @@ def test_prune_keeps_the_newest(tmp_path):
 
 def test_default_dir_honours_xdg(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
-    assert _resume.default_resume_dir() == tmp_path / "xdg" / "tapeback" / "resume"
+    assert _resume.default_resume_dir() == tmp_path / "xdg" / "simic" / "resume"

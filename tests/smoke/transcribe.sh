@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Transcribe a short recording with the INSTALLED tapeback, the way it runs after
-# `tapeback start`: the stereo pipeline, the isolated Whisper worker, the note.
+# Transcribe a short recording with the INSTALLED simic, the way it runs after
+# `simic start`: the stereo pipeline, the isolated Whisper worker, the note.
 #
 #     tests/smoke/transcribe.sh
 #
-# Run by the packaging stands once the package is installed. `tapeback --version` and
-# `tapeback status` import tapeback but never decode audio or load a model, and the
+# Run by the packaging stands once the package is installed. `simic --version` and
+# `simic status` import simic but never decode audio or load a model, and the
 # 0.9.9 stands passed over a PyAV release that broke exactly that. The stands resolve
 # dependencies the way users get them, not from uv.lock, so this is where such a
 # release shows up first.
@@ -22,8 +22,8 @@ vault="$(mktemp -d)"
 
 # The smallest model, on the CPU: the stands have no GPU, and the question is whether
 # the installed stack runs at all, not how well it hears.
-TAPEBACK_VAULT_PATH="$vault" TAPEBACK_STT_MODEL=tiny TAPEBACK_DEVICE=cpu \
-  tapeback process "$here/speech.wav" --name smoke --no-diarize --no-summarize
+SIMIC_VAULT_PATH="$vault" SIMIC_STT_MODEL=tiny SIMIC_DEVICE=cpu \
+  simic process "$here/speech.wav" --name smoke --no-diarize --no-summarize
 
 note="$vault/meetings/smoke.md"
 cat "$note"

@@ -1,9 +1,9 @@
 """Regression: where in-progress recordings live.
 
-Bug 1: sessions were written to /tmp/tapeback, created with
+Bug 1: sessions were written to /tmp/simic, created with
 `mkdir(parents=True, exist_ok=True, mode=0o700)`. The mode applies only when mkdir
 actually creates the directory, and nothing verified one that already existed — so any
-other local user could pre-create /tmp/tapeback (or point it at a directory of their
+other local user could pre-create /tmp/simic (or point it at a directory of their
 own) and then read every meeting recording: raw microphone and system audio, captured
 before any of the masking this project does later.
 
@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from tapeback.recorder import Recorder, session_dir, session_root
-from tapeback.settings import Settings
+from simic.recorder import Recorder, session_dir, session_root
+from simic.settings import Settings
 
 
 def _settings(tmp_path: Path, **overrides) -> Settings:
@@ -35,7 +35,7 @@ def test_sessions_live_in_the_xdg_state_dir_never_the_runtime_dir(tmp_path, monk
 
     root = session_root(_settings(tmp_path))
 
-    assert root == tmp_path / "state" / "tapeback" / "sessions"
+    assert root == tmp_path / "state" / "simic" / "sessions"
     assert not (tmp_path / "run").exists()
 
 
@@ -43,7 +43,7 @@ def test_without_xdg_state_home_the_default_is_under_home(tmp_path, monkeypatch)
     monkeypatch.delenv("XDG_STATE_HOME", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path))
 
-    assert session_root(_settings(tmp_path)) == tmp_path / ".local/state/tapeback/sessions"
+    assert session_root(_settings(tmp_path)) == tmp_path / ".local/state/simic/sessions"
 
 
 def test_a_relative_xdg_state_home_is_ignored(tmp_path, monkeypatch):
@@ -52,12 +52,12 @@ def test_a_relative_xdg_state_home_is_ignored(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_STATE_HOME", "relative/state")
     monkeypatch.setenv("HOME", str(tmp_path))
 
-    assert session_root(_settings(tmp_path)) == tmp_path / ".local/state/tapeback/sessions"
+    assert session_root(_settings(tmp_path)) == tmp_path / ".local/state/simic/sessions"
 
 
 def test_the_sessions_dir_setting_overrides_the_default(tmp_path):
     """Issue #13: a user whose home cannot hold the recording points it elsewhere."""
-    chosen = tmp_path / "big-disk" / "tapeback"
+    chosen = tmp_path / "big-disk" / "simic"
 
     root = session_root(_settings(tmp_path, sessions_dir=chosen))
 
@@ -70,7 +70,7 @@ def test_session_state_follows_xdg_state_home_too(tmp_path, monkeypatch):
     XDG_STATE_HOME does not end up with state in one place and audio in another."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
 
-    assert Recorder().session_file == tmp_path / "state" / "tapeback" / "session.json"
+    assert Recorder().session_file == tmp_path / "state" / "simic" / "session.json"
 
 
 def test_session_root_is_created_private(tmp_path, monkeypatch):
@@ -93,7 +93,7 @@ def test_refuses_a_directory_other_users_can_reach(mode, tmp_path):
     """0o700 passes and one bit more anywhere fails — the exact boundary the check
     draws. Refusing beats repairing: a chmod cannot undo the window in which someone
     else already held the directory open. The message says how to fix it, since with
-    TAPEBACK_SESSIONS_DIR the directory is often one the user made themselves."""
+    SIMIC_SESSIONS_DIR the directory is often one the user made themselves."""
     existing = tmp_path / "sessions"
     existing.mkdir()
     existing.chmod(mode)

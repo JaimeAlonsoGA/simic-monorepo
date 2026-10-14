@@ -1,7 +1,7 @@
 """Regression tests for transcript formatting bugs."""
 
-from tapeback.formatter import TranscriptMeta, format_markdown
-from tapeback.models import Segment
+from simic.formatter import TranscriptMeta, format_markdown
+from simic.models import Segment
 
 
 def _speech(start: float, end: float, speaker: str | None = None) -> Segment:

@@ -1,13 +1,13 @@
-"""What `tapeback ui` offers to change, and how a change reaches the .env every command
+"""What `simic ui` offers to change, and how a change reaches the .env every command
 reads."""
 
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from tapeback import _config
-from tapeback._config import Choice
-from tapeback._sources import Source
-from tapeback.settings import Settings
+from simic import _config
+from simic._config import Choice
+from simic._sources import Source
+from simic.settings import Settings
 
 SOURCES = [
     Source("alsa_output.analog-stereo.monitor", "Monitor of Built-in Audio"),
@@ -136,7 +136,7 @@ def test_none_is_spelled_empty():
 
 
 def test_a_field_set_in_the_environment_is_locked():
-    assert _config.locked({"TAPEBACK_DEVICE": "cuda", "TAPEBACK_BEAM_SIZE": "5"}) == {"device"}
+    assert _config.locked({"SIMIC_DEVICE": "cuda", "SIMIC_BEAM_SIZE": "5"}) == {"device"}
 
 
 def test_an_empty_value_returns_to_the_default():
@@ -161,12 +161,12 @@ def _read(env_file, monkeypatch) -> Settings:
 
 
 def test_save_writes_the_env_file_settings_read(tmp_path, monkeypatch):
-    env_file = tmp_path / "tapeback" / ".env"
+    env_file = tmp_path / "simic" / ".env"
 
     _config.save(env_file, {"vault_path": str(tmp_path / "My Notes"), "diarize": "false"})
 
     assert env_file.read_text() == (
-        f"TAPEBACK_VAULT_PATH='{tmp_path}/My Notes'\nTAPEBACK_DIARIZE='false'\n"
+        f"SIMIC_VAULT_PATH='{tmp_path}/My Notes'\nSIMIC_DIARIZE='false'\n"
     )
     loaded = _read(env_file, monkeypatch)
     assert loaded.vault_path == tmp_path / "My Notes"
@@ -184,7 +184,7 @@ def test_save_makes_a_readable_file_private(tmp_path):
     """A .env made by hand is often 0644. Once it holds an API key, other users on the
     machine must not be able to read it."""
     env_file = tmp_path / ".env"
-    env_file.write_text("TAPEBACK_DEVICE=cpu\n")
+    env_file.write_text("SIMIC_DEVICE=cpu\n")
     env_file.chmod(0o644)
 
     _config.save(env_file, {"llm_api_key": "sk-test"})
@@ -194,20 +194,20 @@ def test_save_makes_a_readable_file_private(tmp_path):
 
 def test_save_keeps_every_other_line(tmp_path):
     env_file = tmp_path / ".env"
-    env_file.write_text("# mine\nTAPEBACK_BEAM_SIZE=5\nTAPEBACK_DEVICE=cpu\n")
+    env_file.write_text("# mine\nSIMIC_BEAM_SIZE=5\nSIMIC_DEVICE=cpu\n")
 
     _config.save(env_file, {"device": "cuda"})
 
-    assert env_file.read_text() == "# mine\nTAPEBACK_BEAM_SIZE=5\nTAPEBACK_DEVICE='cuda'\n"
+    assert env_file.read_text() == "# mine\nSIMIC_BEAM_SIZE=5\nSIMIC_DEVICE='cuda'\n"
 
 
 def test_save_removes_a_setting_returned_to_its_default(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
-    env_file.write_text("TAPEBACK_STT_BACKEND=local\nTAPEBACK_STT_MODEL=large-v3\n")
+    env_file.write_text("SIMIC_STT_BACKEND=local\nSIMIC_STT_MODEL=large-v3\n")
 
     _config.save(env_file, _config.changes_for("stt_backend", "openai"))
 
-    assert env_file.read_text() == "TAPEBACK_STT_BACKEND='openai'\n"
+    assert env_file.read_text() == "SIMIC_STT_BACKEND='openai'\n"
     assert _read(env_file, monkeypatch).stt_model == "whisper-1"
 
 
@@ -219,12 +219,12 @@ def test_save_leaves_a_missing_file_missing_when_there_is_nothing_to_write(tmp_p
 
 def test_save_refuses_settings_that_would_not_load_and_writes_nothing(tmp_path):
     env_file = tmp_path / ".env"
-    env_file.write_text("TAPEBACK_DEVICE=cpu\n")
+    env_file.write_text("SIMIC_DEVICE=cpu\n")
 
     with pytest.raises(ValidationError) as caught:
         _config.save(env_file, {"stt_backend": "openai", "stt_model": "large-v3"})
 
-    assert env_file.read_text() == "TAPEBACK_DEVICE=cpu\n"
+    assert env_file.read_text() == "SIMIC_DEVICE=cpu\n"
     assert _config.describe(caught.value).startswith("Unsupported OpenAI STT model 'large-v3'")
 
 
@@ -233,7 +233,7 @@ def test_save_writes_the_transcripts_folder(tmp_path, monkeypatch):
 
     _config.save(env_file, _config.changes_for("meetings_dir", "Voice notes"))
 
-    assert env_file.read_text() == "TAPEBACK_MEETINGS_DIR='Voice notes'\n"
+    assert env_file.read_text() == "SIMIC_MEETINGS_DIR='Voice notes'\n"
     assert _read(env_file, monkeypatch).meetings_dir == "Voice notes"
 
 

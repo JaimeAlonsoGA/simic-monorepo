@@ -5,7 +5,7 @@ import json
 import pytest
 from pydantic import SecretStr
 
-from tapeback._runlog import (
+from simic._runlog import (
     MAX_RUN_RECORDS,
     RECORDED_SETTINGS,
     RunLog,
@@ -14,7 +14,7 @@ from tapeback._runlog import (
     run_log,
     write_run_log,
 )
-from tapeback.settings import Settings
+from simic.settings import Settings
 
 
 def _read_only_record(directory):
@@ -121,13 +121,13 @@ def test_run_log_disabled_writes_nothing_and_passes_reporter_through(tmp_path):
 
 def test_default_run_log_dir_honours_xdg_data_home(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
-    assert default_run_log_dir() == tmp_path / "xdg" / "tapeback" / "runs"
+    assert default_run_log_dir() == tmp_path / "xdg" / "simic" / "runs"
 
 
 def test_default_run_log_dir_falls_back_to_local_share(monkeypatch, tmp_path):
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
-    monkeypatch.setattr("tapeback._runlog.Path.home", lambda: tmp_path / "home")
-    assert default_run_log_dir() == tmp_path / "home" / ".local" / "share" / "tapeback" / "runs"
+    monkeypatch.setattr("simic._runlog.Path.home", lambda: tmp_path / "home")
+    assert default_run_log_dir() == tmp_path / "home" / ".local" / "share" / "simic" / "runs"
 
 
 @pytest.mark.parametrize(

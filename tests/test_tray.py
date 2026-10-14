@@ -7,7 +7,7 @@ from tests.fixtures import requires_dbus_next
 
 pytestmark = requires_dbus_next
 
-from tapeback.tray import TrayState, build_menu_items  # noqa: E402
+from simic.tray import TrayState, build_menu_items  # noqa: E402
 
 # --- Menu layout (pure function) ---
 
@@ -86,7 +86,7 @@ def test_tooltip_text_recording_includes_session(tray_app):
 
 
 def test_on_start_spawns_thread_when_idle(tray_app):
-    with patch("tapeback.tray.threading.Thread") as mock_thread:
+    with patch("simic.tray.threading.Thread") as mock_thread:
         tray_app._on_start()
     mock_thread.assert_called_once()
     mock_thread.return_value.start.assert_called_once()
@@ -95,14 +95,14 @@ def test_on_start_spawns_thread_when_idle(tray_app):
 
 def test_on_start_ignored_when_recording(tray_app):
     tray_app._state = TrayState.RECORDING
-    with patch("tapeback.tray.threading.Thread") as mock_thread:
+    with patch("simic.tray.threading.Thread") as mock_thread:
         tray_app._on_start()
     mock_thread.assert_not_called()
 
 
 def test_on_start_ignored_when_processing(tray_app):
     tray_app._state = TrayState.PROCESSING
-    with patch("tapeback.tray.threading.Thread") as mock_thread:
+    with patch("simic.tray.threading.Thread") as mock_thread:
         tray_app._on_start()
     mock_thread.assert_not_called()
 
@@ -112,7 +112,7 @@ def test_do_start_success(tray_app):
     tray_app._recorder.start.return_value = "2026-05-21_10-00-00"
     # detect_devices probes pactl on the host; mock it so the test is hermetic
     # (CI runners and minimal containers don't ship pulseaudio-utils).
-    with patch("tapeback.tray.detect_devices"):
+    with patch("simic.tray.detect_devices"):
         tray_app._do_start()
     tray_app._recorder.start.assert_called_once_with(tray_app._settings)
     assert tray_app._state == TrayState.RECORDING
@@ -123,7 +123,7 @@ def test_do_start_failure_resets_to_idle_via_threadsafe(tray_app):
     tray_app._state = TrayState.RECORDING
     tray_app._loop = MagicMock()  # pretend an asyncio loop is running
     tray_app._recorder.start.side_effect = RuntimeError("parecord not found")
-    with patch("tapeback.tray.detect_devices"):
+    with patch("simic.tray.detect_devices"):
         tray_app._do_start()
     tray_app._loop.call_soon_threadsafe.assert_called_once()
     args = tray_app._loop.call_soon_threadsafe.call_args.args
@@ -135,14 +135,14 @@ def test_do_start_failure_resets_to_idle_via_threadsafe(tray_app):
 
 def test_on_stop_spawns_thread_when_recording(tray_app):
     tray_app._state = TrayState.RECORDING
-    with patch("tapeback.tray.threading.Thread") as mock_thread:
+    with patch("simic.tray.threading.Thread") as mock_thread:
         tray_app._on_stop()
     mock_thread.assert_called_once()
     assert tray_app._state == TrayState.PROCESSING
 
 
 def test_on_stop_ignored_when_idle(tray_app):
-    with patch("tapeback.tray.threading.Thread") as mock_thread:
+    with patch("simic.tray.threading.Thread") as mock_thread:
         tray_app._on_stop()
     mock_thread.assert_not_called()
 
@@ -150,7 +150,7 @@ def test_on_stop_ignored_when_idle(tray_app):
 def test_do_stop_and_process_success_returns_to_idle(tray_app):
     tray_app._state = TrayState.PROCESSING
     tray_app._loop = MagicMock()
-    with patch("tapeback.tray.stop_and_process", return_value=Path("/vault/meetings/x.md")):
+    with patch("simic.tray.stop_and_process", return_value=Path("/vault/meetings/x.md")):
         tray_app._do_stop_and_process()
     tray_app._loop.call_soon_threadsafe.assert_called_once()
     args = tray_app._loop.call_soon_threadsafe.call_args.args
@@ -160,7 +160,7 @@ def test_do_stop_and_process_success_returns_to_idle(tray_app):
 def test_do_stop_and_process_failure_returns_to_idle(tray_app):
     tray_app._state = TrayState.PROCESSING
     tray_app._loop = MagicMock()
-    with patch("tapeback.tray.stop_and_process", side_effect=RuntimeError("transcription failed")):
+    with patch("simic.tray.stop_and_process", side_effect=RuntimeError("transcription failed")):
         tray_app._do_stop_and_process()
     tray_app._loop.call_soon_threadsafe.assert_called_once()
     args = tray_app._loop.call_soon_threadsafe.call_args.args
@@ -173,19 +173,19 @@ def test_do_stop_and_process_failure_returns_to_idle(tray_app):
 def test_quit_during_recording_stops_recorder(tray_app, caplog):
     tray_app._state = TrayState.RECORDING
     tray_app._loop = MagicMock()
-    session = Path("/home/u/.local/state/tapeback/sessions/meeting")
+    session = Path("/home/u/.local/state/simic/sessions/meeting")
     tray_app._recorder.stop.return_value = (session / "monitor.wav", session / "mic.wav")
     import asyncio  # noqa: PLC0415
 
     tray_app._stopped = asyncio.Event()
-    with caplog.at_level("INFO", logger="tapeback.tray"):
+    with caplog.at_level("INFO", logger="simic.tray"):
         tray_app._on_quit()
     tray_app._recorder.stop.assert_called_once()
     tray_app._loop.call_soon_threadsafe.assert_called_once()
     # The session that was kept, not just the root it lives under.
     assert (
         "Recording stopped on quit, files preserved in "
-        "/home/u/.local/state/tapeback/sessions/meeting/" in caplog.text
+        "/home/u/.local/state/simic/sessions/meeting/" in caplog.text
     )
 
 

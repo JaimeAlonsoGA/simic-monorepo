@@ -7,13 +7,13 @@ import numpy as np
 import pytest
 from pydantic import SecretStr
 
-from tapeback.channel import (
+from simic.channel import (
     classify_segment_by_channel,
     identify_user_speaker,
     load_stereo_channels,
     split_on_silence,
 )
-from tapeback.diarizer import (
+from simic.diarizer import (
     Diarizer,
     _resegment_by_words,
     assign_speakers,
@@ -21,8 +21,8 @@ from tapeback.diarizer import (
     merge_channel_segments,
     merge_similar_speakers,
 )
-from tapeback.models import DiarizationSegment, Segment, Word
-from tapeback.settings import Settings
+from simic.models import DiarizationSegment, Segment, Word
+from simic.settings import Settings
 from tests.fixtures import (
     create_stereo_wav,
     create_stereo_wav_segments,

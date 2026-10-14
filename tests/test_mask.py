@@ -7,7 +7,7 @@ was said. The other half is that masking off means nothing changes at all.
 
 import pytest
 
-from tapeback._mask import Masker
+from simic._mask import Masker
 
 _EMAIL = "ivan.petrov@example.com"
 _PHONE = "+7 900 123-45-67"

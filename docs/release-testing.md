@@ -24,8 +24,8 @@ Runs `scripts/gate.sh --all` — the CI checks, then every packaging stand whate
 the diff: the wheel and the .debs built and installed in clean containers on the
 `deb-e2e` images (`scripts/deb-smoke.sh`), and the AUR package built and installed
 in an Arch container (`scripts/arch-smoke.sh`) — then the e2e quality suite on real
-recordings. In every container the installed package runs `tapeback --version`,
-`tapeback status` and `tests/smoke/transcribe.sh`, which transcribes a two-voice
+recordings. In every container the installed package runs `simic --version`,
+`simic status` and `tests/smoke/transcribe.sh`, which transcribes a two-voice
 recording through the stereo pipeline with the `tiny` model and checks both
 voices reach the note. The same stands run in the everyday gate whenever a change
 touches what they cover.
@@ -41,8 +41,8 @@ Optional extras (these run pip install during postinst, ~30 s + network):
 ```bash
 docker run --rm -v $PWD/dist:/dist ubuntu:26.04 bash -c '
     apt-get update -qq
-    apt-get install -y -qq /dist/tapeback_*.deb /dist/tapeback-llm_*.deb
-    /opt/tapeback/venv/bin/python -c "import anthropic, openai"
+    apt-get install -y -qq /dist/simic_*.deb /dist/si_mic-llm_*.deb
+    /opt/simic/venv/bin/python -c "import anthropic, openai"
 '
 ```
 
@@ -67,18 +67,18 @@ that is already published, with no PR to turn red.
 
 On a fresh Ubuntu/Debian VM or real machine:
 
-- `sudo apt install ./tapeback_*.deb` → `tapeback --version` prints the tag
-- `tapeback start test-meeting` on a clip with known speakers → markdown
+- `sudo apt install ./simic_*.deb` → `simic --version` prints the tag
+- `simic start test-meeting` on a clip with known speakers → markdown
   written to vault, audio file linked
-- `tapeback tray` on GNOME Wayland WITHOUT the AppIndicator extension → the
+- `simic tray` on GNOME Wayland WITHOUT the AppIndicator extension → the
   warning hint is printed to stderr; pystray still starts (icon may be inert,
   that's expected)
 - After `sudo apt install gnome-shell-extension-appindicator` + enabling the
   extension + re-login → tray icon menu actually responds
-- `sudo apt install ./tapeback-llm_*.deb` → `/opt/tapeback/venv/bin/python -c
+- `sudo apt install ./simic-llm_*.deb` → `/opt/simic/venv/bin/python -c
   "import anthropic, openai"` succeeds
-- `sudo apt remove tapeback-llm` → anthropic/openai uninstalled from the venv;
-  `sudo apt remove tapeback` removes everything
+- `sudo apt remove simic-llm` → anthropic/openai uninstalled from the venv;
+  `sudo apt remove simic` removes everything
 
 If any of these fails on the final tag → bump the patch version, fix, retag.
 Don't amend the released tag.

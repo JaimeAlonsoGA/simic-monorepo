@@ -11,8 +11,8 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from tapeback.live import LiveTranscriber
-from tapeback.settings import Settings
+from simic.live import LiveTranscriber
+from simic.settings import Settings
 
 
 @pytest.mark.parametrize("sample_rate", [16000, 48000])

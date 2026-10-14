@@ -11,35 +11,38 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 <!-- Subsections in order: Security / Added / Changed / Fixed / Removed / Docs. -->
 
 ### Added
-- **Ctrl+C gives the terminal back.** A stopped meeting is transcribed in a detached process; `tapeback status` shows how much is left and a desktop notification says when the note is ready. `--wait` on `start`/`stop`, or `TAPEBACK_BACKGROUND=false`, keeps it in the foreground.
-- **`tapeback recover [NAME]`** transcribes recordings whose processing failed or was interrupted. `tapeback status` lists them.
-- **Light recordings, transcript only.** Each channel is captured as MP3 (`TAPEBACK_AUDIO_FORMAT=mp3`, `TAPEBACK_MP3_BITRATE_K=64`): about 60 MB per hour of meeting. The audio is deleted once the note exists, and never copied into the vault; `TAPEBACK_KEEP_AUDIO=true` archives it and links it from the note. `wav` keeps the old capture, needed for live mode.
-- **`tapeback doctor`** checks the tools, the sound server and its sources, the vault, disk space for recordings, the Whisper model and recordings waiting to be transcribed — before a meeting, not during one.
-- **`tapeback start` shows the recording as it goes**: elapsed time and size per channel, and a warning when a channel stops being written — a capture that had quietly stopped used to look like one that worked.
-- `TAPEBACK_CPU_THREADS`: threads Whisper decodes with on the CPU (default: faster-whisper's 4).
+- **Ctrl+C gives the terminal back.** A stopped meeting is transcribed in a detached process; `simic status` shows how much is left and a desktop notification says when the note is ready. `--wait` on `start`/`stop`, or `SIMIC_BACKGROUND=false`, keeps it in the foreground.
+- **`simic recover [NAME]`** transcribes recordings whose processing failed or was interrupted. `simic status` lists them.
+- **Light recordings, transcript only.** Each channel is captured as MP3 (`SIMIC_AUDIO_FORMAT=mp3`, `SIMIC_MP3_BITRATE_K=64`): about 60 MB per hour of meeting. The audio is deleted once the note exists, and never copied into the vault; `SIMIC_KEEP_AUDIO=true` archives it and links it from the note. `wav` keeps the old capture, needed for live mode.
+- **`simic doctor`** checks the tools, the sound server and its sources, the vault, disk space for recordings, the Whisper model and recordings waiting to be transcribed — before a meeting, not during one.
+- **`simic start` shows the recording as it goes**: elapsed time and size per channel, and a warning when a channel stops being written — a capture that had quietly stopped used to look like one that worked.
+- `SIMIC_CPU_THREADS`: threads Whisper decodes with on the CPU (default: faster-whisper's 4).
 - `scripts/make_bench_meeting.py` builds a benchmark meeting with a reference transcript from public speech (FLEURS), and `scripts/bench_transcribe.py` scores word error rate and sweeps beam size, CPU threads and batch size. Development-only.
 - **Transcription says how long is left** (`about 18 min left`), from the rate so far: on a CPU an hour of meeting takes most of an hour, and a percentage alone does not say whether to wait.
-- **A desktop notification when the note is ready, or could not be made** (`notify-send`; `TAPEBACK_NOTIFY=false` turns it off). From `start`, `stop`, `recover`, `process` and the tray alike.
-- **`start` warns when the other side has been silent for three minutes**: a call playing on an output tapeback is not recording used to cost the whole meeting without a sign.
+- **A desktop notification when the note is ready, or could not be made** (`notify-send`; `SIMIC_NOTIFY=false` turns it off). From `start`, `stop`, `recover`, `process` and the tray alike.
+- **`start` warns when the other side has been silent for three minutes**: a call playing on an output simic is not recording used to cost the whole meeting without a sign.
 - **`start` warns when the disk cannot hold two hours of meeting**, before the meeting rather than when the disk fills.
-- **`tapeback ui`: a window to record and set tapeback up.** One button records and stops; each recording is followed to its note — being transcribed and how far, waiting to be, then the transcripts newest first, five at a time, opening in Obsidian. A settings page covers the vault and its transcripts folder, the output and microphone recorded, the transcription engine, model, language and processor, speakers and the summary, each marked with what `doctor` says of it. Changes go straight to `~/.config/tapeback/.env`, so the window and the CLI never disagree. `tapeback ui --install` adds it to the applications menu. Needs PyGObject with GTK 4 and libadwaita from the system.
-- **`tapeback doctor` checks speakers and the summary**: pyannote and a Hugging Face token when diarization is on, an API key and the provider's package when summaries are. Either missing used to show only after a meeting, as a note without speakers or summary.
+- **`simic ui`: a window to record and set simic up.** One button records and stops; each recording is followed to its note — being transcribed and how far, waiting to be, then the transcripts newest first, five at a time, opening in Obsidian. A settings page covers the vault and its transcripts folder, the output and microphone recorded, the transcription engine, model, language and processor, speakers and the summary, each marked with what `doctor` says of it. Changes go straight to `~/.config/simic/.env`, so the window and the CLI never disagree. `simic ui --install` adds it to the applications menu. Needs PyGObject with GTK 4 and libadwaita from the system.
+- **`simic doctor` checks speakers and the summary**: pyannote and a Hugging Face token when diarization is on, an API key and the provider's package when summaries are. Either missing used to show only after a meeting, as a note without speakers or summary.
+- **Contributor docs for an open project**: `NOTICE` (simic's origin in tapeback), `SECURITY.md` with private reporting, a code of conduct, and bug and feature issue templates.
 
 ### Changed
-- Defaults: `TAPEBACK_SAMPLE_RATE=16000` (Whisper's rate), `TAPEBACK_DEVICE=cpu`, `TAPEBACK_VAULT_PATH=~/code/obsidian`.
+- **tapeback is now simic — Super Intelligent Mic.** The command is `simic`, the PyPI package `si-mic`, settings are `SIMIC_*` and read from `~/.config/simic/.env`; recordings, run records and the resume cache live under `~/.local/state/simic` and `~/.local/share/simic`. Coming from tapeback: rename the `TAPEBACK_` prefix in your `.env`, move it to `~/.config/simic/`, and finish any pending recording with `tapeback recover` first.
+- Defaults: `SIMIC_SAMPLE_RATE=16000` (Whisper's rate), `SIMIC_DEVICE=cpu`.
 - Loudness normalisation runs one ffmpeg per channel, side by side: 44 s instead of 86 s per hour of meeting, byte-identical output.
 - **One transcription at a time.** Meetings stopped back to back wait their turn instead of loading two Whisper models at once, which ran a laptop out of memory.
-- **`tapeback stop` with nothing recording** says so, and points at `tapeback recover` when recordings wait to be transcribed, instead of a traceback.
-- **A transcripts or audio folder outside the vault is refused when settings load** (`TAPEBACK_MEETINGS_DIR`, `TAPEBACK_ATTACHMENTS_DIR`), not after the transcription, when the note was about to be written.
+- **`simic stop` with nothing recording** says so, and points at `simic recover` when recordings wait to be transcribed, instead of a traceback.
+- **A transcripts or audio folder outside the vault is refused when settings load** (`SIMIC_MEETINGS_DIR`, `SIMIC_ATTACHMENTS_DIR`), not after the transcription, when the note was about to be written.
+- The default vault is `~/simic`: set `SIMIC_VAULT_PATH` to your Obsidian vault.
 
 ### Fixed
-- **An interrupted first model download no longer breaks every run after it.** A download cut short left the model without `model.bin`; the cache lookup accepted it, and each run failed with `Unable to open file 'model.bin'` until the cache was deleted by hand. tapeback now downloads what is missing.
-- **Ctrl+C no longer loses the meeting.** A terminal sends Ctrl+C to its whole foreground process group, so the recorders died with the keystroke; `tapeback start` took that for a `tapeback stop` from another terminal and exited 0 — no note, no message, the audio orphaned. The recorders now run in a session of their own, and tapeback stops them itself, recorder before encoder.
+- **An interrupted first model download no longer breaks every run after it.** A download cut short left the model without `model.bin`; the cache lookup accepted it, and each run failed with `Unable to open file 'model.bin'` until the cache was deleted by hand. simic now downloads what is missing.
+- **Ctrl+C no longer loses the meeting.** A terminal sends Ctrl+C to its whole foreground process group, so the recorders died with the keystroke; `simic start` took that for a `simic stop` from another terminal and exited 0 — no note, no message, the audio orphaned. The recorders now run in a session of their own, and simic stops them itself, recorder before encoder.
 - **A recorder dying mid-meeting no longer discards the meeting.** One exited recorder (an unplugged headset, a PipeWire restart) made `start` return silently. It now names the channel that stopped and transcribes what was captured.
-- **A session left by a killed `start` no longer records on.** The next `start` stops its surviving recorder; the audio stays for `tapeback recover`.
+- **A session left by a killed `start` no longer records on.** The next `start` stops its surviving recorder; the audio stays for `simic recover`.
 - **Live transcription at 16 kHz.** Chunks were decimated as if captured at 48 kHz, so Whisper heard a third of each one. Live mode now requires a sample rate that is a multiple of 16000.
 - **A transcription worker killed for lack of memory says so**, instead of `exited with code -9`.
-- **A meeting already being transcribed is no longer announced as failed** when a second `tapeback recover` reaches it.
+- **A meeting already being transcribed is no longer announced as failed** when a second `simic recover` reaches it.
 
 ### Docs
 - `docs/spec/BACKLOG.md` records the first CPU benchmark (threads, beam, batching, parallel channels) and how to repeat it on the recording machine.

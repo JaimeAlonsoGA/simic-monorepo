@@ -1,0 +1,44 @@
+name: Bug report
+description: Something does not work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do not paste transcripts or recordings of real
+        meetings — they contain other people's words.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. simic start
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `simic doctor`
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Terminal output or run record
+      description: The run record is in ~/.local/share/simic/runs/ — it never contains credentials.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: simic version (`simic --version`) and distribution
+      placeholder: simic 1.0.0, Ubuntu 24.04, PipeWire
+    validations:
+      required: true

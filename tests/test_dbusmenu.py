@@ -6,7 +6,7 @@ pytestmark = requires_dbus_next
 
 from dbus_next import Variant  # noqa: E402
 
-from tapeback._dbusmenu import DBusMenu, MenuItem, _item_properties, build_layout  # noqa: E402
+from simic._dbusmenu import DBusMenu, MenuItem, _item_properties, build_layout  # noqa: E402
 
 
 def test_item_properties_full_set_when_no_filter():

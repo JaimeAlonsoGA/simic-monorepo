@@ -8,12 +8,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from tapeback._lazy import load_transcriber
-from tapeback._stt_media import _UploadJob
-from tapeback._stt_openai import OpenAITranscriber, _resolve_api_key
-from tapeback._stt_openai_fmt import _info_from_response, _segments_from_verbose
-from tapeback.models import Segment
-from tapeback.settings import Settings
+from simic._lazy import load_transcriber
+from simic._stt_media import _UploadJob
+from simic._stt_openai import OpenAITranscriber, _resolve_api_key
+from simic._stt_openai_fmt import _info_from_response, _segments_from_verbose
+from simic.models import Segment
+from simic.settings import Settings
 from tests.fixtures import create_silent_wav
 
 
@@ -44,13 +44,13 @@ def test_resolve_api_key_ignores_llm_key_for_non_openai_provider(monkeypatch, tm
         llm_provider="anthropic",
         llm_api_key=SecretStr("sk-ant-not-for-stt"),
     )
-    with pytest.raises(RuntimeError, match="TAPEBACK_STT_API_KEY"):
+    with pytest.raises(RuntimeError, match="SIMIC_STT_API_KEY"):
         _resolve_api_key(s)
 
 
 def test_resolve_api_key_missing_raises(monkeypatch, settings):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    with pytest.raises(RuntimeError, match="TAPEBACK_STT_API_KEY"):
+    with pytest.raises(RuntimeError, match="SIMIC_STT_API_KEY"):
         _resolve_api_key(settings)
 
 
@@ -68,7 +68,7 @@ def test_openai_transcriber_describe(monkeypatch, settings):
 
 def test_openai_transcriber_missing_api_key_raises(monkeypatch, settings):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    with pytest.raises(RuntimeError, match="TAPEBACK_STT_API_KEY"):
+    with pytest.raises(RuntimeError, match="SIMIC_STT_API_KEY"):
         OpenAITranscriber(settings)
 
 
@@ -99,12 +99,12 @@ def test_openai_transcriber_calls_api_and_maps_segments(monkeypatch, settings, t
             "stt_model": "whisper-1",
             "resume_cache": False,
             "language": "en",
-            "hotwords": "tapeback",
+            "hotwords": "simic",
         }
     )
 
     with (
-        patch("tapeback._stt_openai._encode_mp3") as encode,
+        patch("simic._stt_openai._encode_mp3") as encode,
         patch("openai.OpenAI", return_value=mock_client) as openai_cls,
     ):
 
@@ -123,7 +123,7 @@ def test_openai_transcriber_calls_api_and_maps_segments(monkeypatch, settings, t
     assert kwargs["language"] == "en"
     assert kwargs["response_format"] == "verbose_json"
     assert kwargs["timestamp_granularities"] == ["word", "segment"]
-    assert kwargs["prompt"] == "tapeback"
+    assert kwargs["prompt"] == "simic"
     assert len(segments) == 1
     assert segments[0].text == "hi"
     assert info["language"] == "en"
@@ -145,12 +145,12 @@ def test_openai_transcriber_text_only_model_skips_verbose(monkeypatch, settings,
             "stt_model": "gpt-transcribe",
             "resume_cache": False,
             "language": "en",
-            "hotwords": "tapeback, RabbitMQ",
+            "hotwords": "simic, RabbitMQ",
         }
     )
 
     with (
-        patch("tapeback._stt_openai._encode_mp3") as encode,
+        patch("simic._stt_openai._encode_mp3") as encode,
         patch("openai.OpenAI", return_value=mock_client),
     ):
 
@@ -165,8 +165,8 @@ def test_openai_transcriber_text_only_model_skips_verbose(monkeypatch, settings,
     assert "timestamp_granularities" not in kwargs
     assert "language" not in kwargs
     assert kwargs["extra_body"]["languages"] == ["en"]
-    assert kwargs["extra_body"]["keywords"] == ["tapeback", "RabbitMQ"]
-    assert kwargs["prompt"] == "tapeback, RabbitMQ"
+    assert kwargs["extra_body"]["keywords"] == ["simic", "RabbitMQ"]
+    assert kwargs["prompt"] == "simic, RabbitMQ"
     assert len(segments) == 1
     assert segments[0].text == "plain text only"
     assert segments[0].words is None
@@ -200,8 +200,8 @@ def test_openai_transcriber_diarize_model_maps_speakers(monkeypatch, settings, t
     )
 
     with (
-        patch("tapeback._stt_openai._encode_mp3") as encode,
-        patch("tapeback._stt_openai._wav_duration", return_value=45.0),
+        patch("simic._stt_openai._encode_mp3") as encode,
+        patch("simic._stt_openai._wav_duration", return_value=45.0),
         patch("openai.OpenAI", return_value=mock_client),
     ):
 
@@ -257,9 +257,9 @@ def test_openai_transcriber_chunks_long_audio(monkeypatch, settings, tmp_path):
         )
 
     with (
-        patch("tapeback._stt_openai._wav_duration", return_value=150.0),
-        patch("tapeback._stt_openai._max_chunk_seconds", return_value=100.0),
-        patch("tapeback._stt_openai_chunks._slice_wav") as slice_wav,
+        patch("simic._stt_openai._wav_duration", return_value=150.0),
+        patch("simic._stt_openai._max_chunk_seconds", return_value=100.0),
+        patch("simic._stt_openai_chunks._slice_wav") as slice_wav,
         patch.object(OpenAITranscriber, "_transcribe_one_upload", side_effect=_fake_one_upload),
     ):
         segments, info = t.transcribe(audio)
@@ -319,9 +319,9 @@ def test_openai_transcriber_chunks_run_in_parallel(monkeypatch, settings, tmp_pa
         )
 
     with (
-        patch("tapeback._stt_openai._wav_duration", return_value=300.0),
-        patch("tapeback._stt_openai._max_chunk_seconds", return_value=100.0),
-        patch("tapeback._stt_openai_chunks._slice_wav"),
+        patch("simic._stt_openai._wav_duration", return_value=300.0),
+        patch("simic._stt_openai._max_chunk_seconds", return_value=100.0),
+        patch("simic._stt_openai_chunks._slice_wav"),
         patch.object(OpenAITranscriber, "_transcribe_one_upload", side_effect=_fake_one_upload),
     ):
         segments, info = t.transcribe(audio)
@@ -372,9 +372,9 @@ def test_diarize_model_chunks_under_soft_target(monkeypatch, settings, tmp_path)
         )
 
     with (
-        patch("tapeback._stt_openai._wav_duration", return_value=1609.0),
-        patch("tapeback._stt_openai._max_chunk_seconds", return_value=size_only_limit),
-        patch("tapeback._stt_openai_chunks._slice_wav"),
+        patch("simic._stt_openai._wav_duration", return_value=1609.0),
+        patch("simic._stt_openai._max_chunk_seconds", return_value=size_only_limit),
+        patch("simic._stt_openai_chunks._slice_wav"),
         patch.object(OpenAITranscriber, "_transcribe_one_upload", side_effect=_fake_one_upload),
     ):
         segments, info = t.transcribe(audio)
@@ -421,9 +421,9 @@ def test_openai_transcriber_auto_language_locks_then_parallels(monkeypatch, sett
         )
 
     with (
-        patch("tapeback._stt_openai._wav_duration", return_value=200.0),
-        patch("tapeback._stt_openai._max_chunk_seconds", return_value=100.0),
-        patch("tapeback._stt_openai_chunks._slice_wav"),
+        patch("simic._stt_openai._wav_duration", return_value=200.0),
+        patch("simic._stt_openai._max_chunk_seconds", return_value=100.0),
+        patch("simic._stt_openai_chunks._slice_wav"),
         patch.object(OpenAITranscriber, "_transcribe_one_upload", side_effect=_fake_one_upload),
     ):
         segments, info = t.transcribe(audio)
@@ -532,9 +532,9 @@ def test_openai_transcriber_retries_timeout_then_succeeds(monkeypatch, settings,
         mp3.write_bytes(b"x")
 
     with (
-        patch("tapeback._stt_openai._encode_mp3", side_effect=_fake_encode),
+        patch("simic._stt_openai._encode_mp3", side_effect=_fake_encode),
         patch.object(OpenAITranscriber, "_call_api", side_effect=_call_api),
-        patch("tapeback._stt_retry.time.sleep"),
+        patch("simic._stt_retry.time.sleep"),
     ):
         segments, info = t.transcribe(audio, on_status=status.append)
 
@@ -565,7 +565,7 @@ def test_openai_transcriber_does_not_retry_bad_request(monkeypatch, settings, tm
         mp3.write_bytes(b"x")
 
     with (
-        patch("tapeback._stt_openai._encode_mp3", side_effect=_fake_encode),
+        patch("simic._stt_openai._encode_mp3", side_effect=_fake_encode),
         patch.object(OpenAITranscriber, "_call_api", side_effect=_call_api),
         pytest.raises(BadRequestError),
     ):
@@ -638,9 +638,9 @@ def test_openai_chunk_resume_skips_completed_chunk(monkeypatch, settings, tmp_pa
         )
 
     with (
-        patch("tapeback._stt_openai._wav_duration", return_value=1200.0),
-        patch("tapeback._stt_openai._max_chunk_seconds", return_value=2988.0),
-        patch("tapeback._stt_openai_chunks._slice_wav"),
+        patch("simic._stt_openai._wav_duration", return_value=1200.0),
+        patch("simic._stt_openai._max_chunk_seconds", return_value=2988.0),
+        patch("simic._stt_openai_chunks._slice_wav"),
         patch.object(OpenAITranscriber, "_transcribe_one_upload", side_effect=_fail_on_second),
     ):
         t1 = OpenAITranscriber(s)
@@ -650,9 +650,9 @@ def test_openai_chunk_resume_skips_completed_chunk(monkeypatch, settings, tmp_pa
 
     uploaded.clear()
     with (
-        patch("tapeback._stt_openai._wav_duration", return_value=1200.0),
-        patch("tapeback._stt_openai._max_chunk_seconds", return_value=2988.0),
-        patch("tapeback._stt_openai_chunks._slice_wav"),
+        patch("simic._stt_openai._wav_duration", return_value=1200.0),
+        patch("simic._stt_openai._max_chunk_seconds", return_value=2988.0),
+        patch("simic._stt_openai_chunks._slice_wav"),
         patch.object(OpenAITranscriber, "_transcribe_one_upload", side_effect=_ok),
     ):
         t2 = OpenAITranscriber(s)

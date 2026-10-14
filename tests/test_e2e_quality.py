@@ -4,7 +4,7 @@ These tests use real audio files and real ML models (faster-whisper, pyannote).
 They are slow (minutes) and need HF_TOKEN for pyannote; a GPU makes them faster.
 The recordings live in tests/data/, outside git.
 
-Run with: TAPEBACK_RUN_E2E=1 HF_TOKEN=... uv run pytest tests/test_e2e_quality.py -v
+Run with: SIMIC_RUN_E2E=1 HF_TOKEN=... uv run pytest tests/test_e2e_quality.py -v
 """
 
 import os
@@ -14,16 +14,16 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from tapeback.cli import cli
-from tapeback.pipeline import process_stereo_file
+from simic.cli import cli
+from simic.pipeline import process_stereo_file
 
-_RUN_E2E = os.environ.get("TAPEBACK_RUN_E2E", "").lower() in ("1", "true", "yes")
+_RUN_E2E = os.environ.get("SIMIC_RUN_E2E", "").lower() in ("1", "true", "yes")
 _TEST_DATA = Path(__file__).parent / "data"
 # You on the mic, two other people on the monitor channel.
 _STEREO_WAV = _TEST_DATA / "2026-04-02_22-01-53.wav"
 
 pytestmark = [
-    pytest.mark.skipif(not _RUN_E2E, reason="Set TAPEBACK_RUN_E2E=1 to run e2e tests"),
+    pytest.mark.skipif(not _RUN_E2E, reason="Set SIMIC_RUN_E2E=1 to run e2e tests"),
     pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg required"),
     pytest.mark.skipif(not _STEREO_WAV.exists(), reason="Test WAV not found"),
 ]
@@ -64,7 +64,7 @@ def test_stereo_pipeline_with_diarization(e2e_settings, e2e_output_dir):
 
 
 def test_process_command_with_real_audio(e2e_settings):
-    """tapeback process command with real stereo WAV end-to-end."""
+    """simic process command with real stereo WAV end-to-end."""
     runner = CliRunner()
     result = runner.invoke(
         cli,
@@ -77,8 +77,8 @@ def test_process_command_with_real_audio(e2e_settings):
             "--no-summarize",
         ],
         env={
-            "TAPEBACK_VAULT_PATH": str(e2e_settings.vault_path),
-            "TAPEBACK_DIARIZE": "false",
+            "SIMIC_VAULT_PATH": str(e2e_settings.vault_path),
+            "SIMIC_DIARIZE": "false",
         },
     )
 

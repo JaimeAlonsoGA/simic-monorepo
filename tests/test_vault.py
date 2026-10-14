@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from tapeback.vault import obsidian_uri
+from simic.vault import obsidian_uri
 
 
 def test_a_note_opens_in_obsidian_by_its_path():

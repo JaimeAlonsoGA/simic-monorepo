@@ -3,13 +3,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from tapeback.settings import Settings
+from simic.settings import Settings
 
 
 def test_settings_from_env(monkeypatch, vault_env):
     """Settings should parse values from environment variables."""
-    monkeypatch.setenv("TAPEBACK_STT_MODEL", "tiny")
-    monkeypatch.setenv("TAPEBACK_LANGUAGE", "ru")
+    monkeypatch.setenv("SIMIC_STT_MODEL", "tiny")
+    monkeypatch.setenv("SIMIC_LANGUAGE", "ru")
 
     s = Settings()
     assert s.vault_path == vault_env
@@ -18,23 +18,23 @@ def test_settings_from_env(monkeypatch, vault_env):
 
 
 def test_settings_whisper_model_env_deprecated(monkeypatch, vault_env):
-    """TAPEBACK_WHISPER_MODEL still works but feeds stt_model."""
-    monkeypatch.delenv("TAPEBACK_STT_MODEL", raising=False)
-    monkeypatch.setenv("TAPEBACK_WHISPER_MODEL", "tiny")
-    with pytest.warns(FutureWarning, match="TAPEBACK_WHISPER_MODEL"):
+    """SIMIC_WHISPER_MODEL still works but feeds stt_model."""
+    monkeypatch.delenv("SIMIC_STT_MODEL", raising=False)
+    monkeypatch.setenv("SIMIC_WHISPER_MODEL", "tiny")
+    with pytest.warns(FutureWarning, match="SIMIC_WHISPER_MODEL"):
         s = Settings()
     assert s.stt_model == "tiny"
     assert s.whisper_model == "tiny"
 
 
 def test_settings_vault_path_default(monkeypatch, tmp_path):
-    """vault_path should default to ~/code/obsidian when not set."""
-    monkeypatch.delenv("TAPEBACK_VAULT_PATH", raising=False)
+    """vault_path should default to ~/simic when not set."""
+    monkeypatch.delenv("SIMIC_VAULT_PATH", raising=False)
     # Use empty dir so no .env is found
     monkeypatch.chdir(tmp_path)
 
     s = Settings(_env_file=str(tmp_path / "nonexistent.env"))  # type: ignore
-    assert s.vault_path == Path.home() / "code" / "obsidian"
+    assert s.vault_path == Path.home() / "simic"
 
 
 def test_settings_defaults(tmp_vault):
@@ -72,9 +72,9 @@ def test_settings_stt_backend_openai_default_model(tmp_vault):
 
 
 def test_settings_stt_backend_from_env(monkeypatch, vault_env):
-    monkeypatch.setenv("TAPEBACK_STT_BACKEND", "openai")
-    monkeypatch.setenv("TAPEBACK_STT_MODEL", "gpt-transcribe")
-    monkeypatch.setenv("TAPEBACK_STT_CONCURRENCY", "8")
+    monkeypatch.setenv("SIMIC_STT_BACKEND", "openai")
+    monkeypatch.setenv("SIMIC_STT_MODEL", "gpt-transcribe")
+    monkeypatch.setenv("SIMIC_STT_CONCURRENCY", "8")
     s = Settings()
     assert s.stt_backend == "openai"
     assert s.stt_model == "gpt-transcribe"
@@ -88,7 +88,7 @@ def test_settings_rejects_unknown_openai_model(tmp_vault):
 
 def test_settings_hf_token_from_env(monkeypatch, vault_env):
     """HF token should be parsed from environment variable."""
-    monkeypatch.setenv("TAPEBACK_HF_TOKEN", "hf_test_token_123")
+    monkeypatch.setenv("SIMIC_HF_TOKEN", "hf_test_token_123")
 
     s = Settings()
     assert s.hf_token.get_secret_value() == "hf_test_token_123"
@@ -96,8 +96,8 @@ def test_settings_hf_token_from_env(monkeypatch, vault_env):
 
 def test_secrets_not_leaked_in_repr_or_dump(monkeypatch, vault_env):
     """HF token and LLM API key must not appear in repr/str/model_dump output."""
-    monkeypatch.setenv("TAPEBACK_HF_TOKEN", "hf_supersecret_abc")
-    monkeypatch.setenv("TAPEBACK_LLM_API_KEY", "sk-ant-supersecret-xyz")
+    monkeypatch.setenv("SIMIC_HF_TOKEN", "hf_supersecret_abc")
+    monkeypatch.setenv("SIMIC_LLM_API_KEY", "sk-ant-supersecret-xyz")
 
     s = Settings()
 
@@ -123,10 +123,10 @@ def test_settings_live_defaults(tmp_vault):
 
 def test_settings_live_from_env(monkeypatch, vault_env):
     """Live settings should be configurable via environment variables."""
-    monkeypatch.setenv("TAPEBACK_LIVE", "true")
-    monkeypatch.setenv("TAPEBACK_LIVE_INTERVAL", "30")
-    monkeypatch.setenv("TAPEBACK_LIVE_OVERLAP", "3.0")
-    monkeypatch.setenv("TAPEBACK_LIVE_MIN_CHUNK", "10.0")
+    monkeypatch.setenv("SIMIC_LIVE", "true")
+    monkeypatch.setenv("SIMIC_LIVE_INTERVAL", "30")
+    monkeypatch.setenv("SIMIC_LIVE_OVERLAP", "3.0")
+    monkeypatch.setenv("SIMIC_LIVE_MIN_CHUNK", "10.0")
 
     s = Settings()
     assert s.live is True

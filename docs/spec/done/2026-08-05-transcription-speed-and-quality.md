@@ -83,7 +83,7 @@ So **every encoder pass costs a full 30 s but advances only 7 s of audio** — 4
 a multiplier on top of everything else.
 
 **The value in force on this machine is 2, not the repo default of 7.**
-`~/.config/tapeback/.env` sets `TAPEBACK_CHUNK_LENGTH=2`, so production runs pad 200 frames to
+`~/.config/simic/.env` sets `SIMIC_CHUNK_LENGTH=2`, so production runs pad 200 frames to
 3000 — **15x redundant encoder passes**, not 4.3x. This was found by the stage 1c work (a test
 asserting the default 7 read 2 instead) and is the single largest factor behind the 8203 s.
 
@@ -138,14 +138,14 @@ with cause 1 it triggers on four times as many windows.
 - Tooling already exists: `scripts/thermal_profile.sh on <MHz>` (nvidia-smi `-lgc` + CPU `no_turbo` +
   RAPL written into both `intel-rapl:0` and `intel-rapl-mmio:0`).
 
-Conclusion for tapeback: **clamp monitoring is worth having as observability, not as a cure.** A
+Conclusion for simic: **clamp monitoring is worth having as observability, not as a cure.** A
 two-hour run will always end up clamped; a 90-second one never will. Remove the 4.3x of redundant
 work first, then measure what remains.
 
 ### 5. No progress output, so runs get killed by hand
 
 The only line for the entire run was `"Transcribing (this may take a few minutes)..."`
-(`pipeline.py:196`). faster-whisper offers `log_progress` (`transcribe.py:259`), which tapeback never
+(`pipeline.py:196`). faster-whisper offers `log_progress` (`transcribe.py:259`), which simic never
 passed. No timeouts, no cancellation, no partial results: on `KeyboardInterrupt` even
 `free_gpu_memory()` is skipped (`pipeline.py:228-229` sits on the non-exception path).
 
@@ -171,7 +171,7 @@ What its absence costs, from the actual transcripts:
 - RAG within a single meeting: `rec` / `Rick` / `Ray` / `REC` / `Wreck` / `racist` / `rails` — six
   spellings of one term
 - ONNX → `on an X Runtime`, OpenVINO → `OpenSWIFO`, Excalidraw → `Escalidraw`
-- tapeback → `тейп *B*`, `тейпбэком`
+- simic → `тейп *B*`, `тейпбэком`
 - "ML and CV pipeline integration" → `ML and CVS. pipeline integration` / `pipeline. immigration`
 
 ### 3. `language="auto"` with `language_detection_segments=1`
@@ -202,7 +202,7 @@ identical recognition errors. Diarization additionally splits single utterances 
 
 ### 7. The batching trap
 
-With `TAPEBACK_BATCH_SIZE>0`, faster-whisper 1.2.1 **silently ignores** `no_speech_threshold`,
+With `SIMIC_BATCH_SIZE>0`, faster-whisper 1.2.1 **silently ignores** `no_speech_threshold`,
 `condition_on_previous_text` and `hallucination_silence_threshold`, and takes only the first value
 from `temperature` (`transcribe.py:316-317, 351-369`). Enabling batching therefore quietly disables
 the entire anti-hallucination configuration. The README does not warn about this.
@@ -264,8 +264,8 @@ Stage 'transcribe monitor' took 409.1s
   that path. The gating works — mic now finishes in 52 s. The problem moved.
 - The same file took 116.8 s end-to-end in the isolated benchmark but 409 s for a single channel
   inside the pipeline. **Initial hypothesis — that `loudnorm` was inflating VAD speech and firing
-  the temperature ladder — was wrong.** The pipeline reads `~/.config/tapeback/.env`
-  (`TAPEBACK_CHUNK_LENGTH=2`) while the benchmark passed 7 explicitly. An isolated run at 2 takes
+  the temperature ladder — was wrong.** The pipeline reads `~/.config/simic/.env`
+  (`SIMIC_CHUNK_LENGTH=2`) while the benchmark passed 7 explicitly. An isolated run at 2 takes
   390.6 s, against 409 s in the pipeline: `loudnorm` accounts for roughly 5 %, not the bulk. Stage 2
   should therefore treat the `aresample`/`loudnorm` reordering as an ffmpeg-time optimisation only,
   and not weaken `loudnorm` on the strength of a hypothesis that measurement has now refuted.
@@ -277,7 +277,7 @@ Landed as a ~400-line code diff. `ruff` and `ty` clean; **296 tests pass, covera
 - `_gpu.py`: `sample_gpu()` context manager polling
   `clocks.sm,temperature.gpu,memory.used,clocks_event_reasons.active` every 5 s on a daemon thread,
   reporting one `GpuStats.format()` line per stage. **Observation only — no cap management, no
-  sudo**: tapeback stays an unprivileged CLI, and `thermal_profile.sh` is run separately by hand.
+  sudo**: simic stays an unprivileged CLI, and `thermal_profile.sh` is run separately by hand.
 - Throttle accounting uses the NVML bitmask and deliberately excludes `GpuIdle` (0x1) and
   `ApplicationsClocksSetting` (0x2) — idling is not throttling, and an applied cap is a setting
   rather than a symptom. Only SW power cap, HW slowdown, SW/HW thermal and HW power brake count.
@@ -287,7 +287,7 @@ Landed as a ~400-line code diff. `ruff` and `ty` clean; **296 tests pass, covera
 - `sample_gpu` waits for the first poll before entering the block, so a stage shorter than the
   sampling interval still reports, and the sampler's output is deterministic rather than dependent
   on thread scheduling.
-- New setting `TAPEBACK_GPU_TELEMETRY` (default on); no-op without `nvidia-smi` or on `cpu`.
+- New setting `SIMIC_GPU_TELEMETRY` (default on); no-op without `nvidia-smi` or on `cpu`.
 - Verified against real `nvidia-smi` output, not only mocks: `['300', '57', '51',
   '0x0000000000000001']` parsed to `GPU: sm 300 MHz avg / 300 min, max 57°C, 51 MiB peak,
   throttled 0% of 6 samples` — idle correctly not counted as throttled.
@@ -297,8 +297,8 @@ Landed as a ~400-line code diff. `ruff` and `ty` clean; **296 tests pass, covera
 Split out of 1b to stay under the ~500-line commit limit. **312 tests pass, coverage 93.88 %.**
 
 - `_runlog.py`: `run_log()` context manager writing one JSON record per run to
-  `~/.local/share/tapeback/runs/` (honours `XDG_DATA_HOME`; `TAPEBACK_RUN_LOG`,
-  `TAPEBACK_RUN_LOG_DIR`). Holds the settings actually used, every status line verbatim, and the
+  `~/.local/share/simic/runs/` (honours `XDG_DATA_HOME`; `SIMIC_RUN_LOG`,
+  `SIMIC_RUN_LOG_DIR`). Holds the settings actually used, every status line verbatim, and the
   outcome — `completed` / `aborted` (Ctrl+C) / `failed` (with the error). Exceptions are classified
   and re-raised unchanged, never swallowed.
 - Status lines are stored verbatim rather than parsed back into fields: re-parsing our own formatted
@@ -311,15 +311,15 @@ Split out of 1b to stay under the ~500-line commit limit. **312 tests pass, cove
   produced it. Directory is pruned to the newest 200 records.
 
 **What it caught immediately.** A test asserting the default `chunk_length == 7` read `2`: the test
-suite was never isolated from `~/.config/tapeback/.env`, so every `Settings()` in every test
+suite was never isolated from `~/.config/simic/.env`, so every `Settings()` in every test
 inherited the developer's machine configuration. Fixed with an autouse fixture that detaches both
-env-file sources and clears ambient `TAPEBACK_*` variables, plus a regression test. The same finding
+env-file sources and clears ambient `SIMIC_*` variables, plus a regression test. The same finding
 corrected the headline speed number above from 2.82x to **9.4x**.
 
 ### Stage 2 — speed — DONE
 
-**315 tests pass, coverage 93.88 %.** The user's `TAPEBACK_CHUNK_LENGTH=2` override has been removed
-from `~/.config/tapeback/.env`, so the new default is what runs.
+**315 tests pass, coverage 93.88 %.** The user's `SIMIC_CHUNK_LENGTH=2` override has been removed
+from `~/.config/simic/.env`, so the new default is what runs.
 
 - `chunk_length` default raised `7` → `30` (`settings.py`), with the encoder-window reasoning in the
   comment so it does not get lowered again to fight hallucinations.
@@ -438,8 +438,8 @@ contribution from the glossary's. Output: a table in CHANGELOG/README and fixed 
 
 - `whisper_model` and `compute_type` set from stage 3a results (`compute_type=auto` on cuda currently
   yields `float16`, `transcriber.py:38-39`; large-v3 would need `int8_float16`).
-- New `TAPEBACK_HOTWORDS` setting (string) threaded into `_invoke_transcribe`. Default: the project
-  glossary — RAG, ONNX, OpenVINO, LLM, Whisper, Obsidian, tapeback, Excalidraw, Jira, Notion,
+- New `SIMIC_HOTWORDS` setting (string) threaded into `_invoke_transcribe`. Default: the project
+  glossary — RAG, ONNX, OpenVINO, LLM, Whisper, Obsidian, simic, Excalidraw, Jira, Notion,
   embeddings, vector search, and so on.
 - `language`: stop detecting the language independently per channel. Either detect once on the more
   speech-heavy channel and reuse it, or raise `language_detection_segments` from its default of 1
@@ -519,7 +519,7 @@ multi-hour one.
    in the first place. backlog_profiler's Gate 4 measured 0 % throttled samples over
    76 minutes with pacing, against 93–96 % without.
 3. External clock caps (`thermal_profile.sh on 1050`) remain the only thing that removes
-   the clamp entirely, and remain a manual step: they need root, and tapeback stays an
+   the clamp entirely, and remain a manual step: they need root, and simic stays an
    unprivileged CLI.
 
 Both 1 and 2 need settings, and both change runtime behaviour materially rather than only
@@ -531,11 +531,11 @@ reporting — so they are worth agreeing on before they ship.
   the note is tagged `partial` with a visible warning; the second channel is skipped rather than
   making the user interrupt twice; a further Ctrl+C still stops the process.
 - `try/finally` around transcription so `free_gpu_memory()` runs on the exception path too.
-- **Process isolation** (`TAPEBACK_ISOLATE_TRANSCRIPTION`): transcription runs in a child, so the
+- **Process isolation** (`SIMIC_ISOLATE_TRANSCRIPTION`): transcription runs in a child, so the
   unfixable ctranslate2 OOM leak dies with it. Verified on the configuration that used to strand
   the card: free VRAM 3674 → 95 MiB in-process, 3674 → **3674 MiB** isolated. Segments stream back
   as complete lines, so a killed worker still leaves its finished work with the parent.
-- **Resume** (`TAPEBACK_RESUME_CACHE`): a completed channel is cached against the audio plus every
+- **Resume** (`SIMIC_RESUME_CACHE`): a completed channel is cached against the audio plus every
   output-affecting setting. Measured on a real clip, a repeat run went **85.8 s → 0.0 s**.
 
 **Two limits worth stating.** Resuming part-way through a channel was rejected on evidence, not
@@ -560,7 +560,7 @@ Reference file: `2026-04-17_19-08-24.wav` (13m37s) — previous iterations ran o
 exist. Long case: `2026-07-30_13-25-08.wav` (15m55s) — the run that never finished.
 
 ```bash
-uv run tapeback process <file> --no-diarize --no-summarize
+uv run simic process <file> --no-diarize --no-summarize
 ```
 
 Record per run: stage timings, RTF, sm avg / max temp / % throttled, segment count, presence of

@@ -7,22 +7,22 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr
 
-from tapeback._mono import _maybe_diarize_segments
-from tapeback.audio import get_channel_count, is_stereo, merge_channels, split_channels_16k
-from tapeback.channel import (
+from simic._mono import _maybe_diarize_segments
+from simic.audio import get_channel_count, is_stereo, merge_channels, split_channels_16k
+from simic.channel import (
     classify_segment_by_channel,
     filter_silent_segments,
     identify_user_speaker,
     load_stereo_channels,
 )
-from tapeback.diarizer import (
+from simic.diarizer import (
     assign_speakers,
     merge_channel_segments,
 )
-from tapeback.formatter import TranscriptMeta, format_markdown
-from tapeback.models import DiarizationSegment, Segment
-from tapeback.settings import Settings
-from tapeback.vault import save_markdown_to_vault
+from simic.formatter import TranscriptMeta, format_markdown
+from simic.models import DiarizationSegment, Segment
+from simic.settings import Settings
+from simic.vault import save_markdown_to_vault
 from tests.fixtures import create_mono_wav, create_stereo_wav, create_stereo_wav_segments
 
 
@@ -271,7 +271,7 @@ def test_diarization_unavailable_warning(tmp_vault):
     segments = [Segment(start=0.0, end=5.0, text="Hello.")]
     messages: list[str] = []
 
-    with patch("tapeback._mono.diarization_available", return_value=False):
+    with patch("simic._mono.diarization_available", return_value=False):
         result = _maybe_diarize_segments(
             segments,
             settings,
@@ -282,7 +282,7 @@ def test_diarization_unavailable_warning(tmp_vault):
         )
 
     assert result == segments
-    assert any("uv pip install tapeback[diarize]" in m for m in messages)
+    assert any("uv pip install si-mic[diarize]" in m for m in messages)
 
 
 # --- Atomic markdown write ---
@@ -294,7 +294,7 @@ def test_save_markdown_to_vault_is_atomic(tmp_vault):
     session = "2026-03-20_10-00-00"
 
     with (
-        patch("tapeback.vault.os.replace", side_effect=OSError("disk full")),
+        patch("simic.vault.os.replace", side_effect=OSError("disk full")),
         pytest.raises(OSError, match="disk full"),
     ):
         save_markdown_to_vault("final content", settings, session)

@@ -1,44 +1,58 @@
-# tapeback
+# simic — Super Intelligent Mic
 
-Local meeting recorder for Linux. Records system audio + microphone via
-PipeWire/PulseAudio, transcribes with Whisper (local by default), identifies speakers, saves
-Markdown to your Obsidian vault. Transcription stays on your machine unless you
-opt into a remote STT backend (OpenAI today).
+[![CI](https://github.com/JaimeAlonsoGA/simic-monorepo/actions/workflows/ci.yml/badge.svg)](https://github.com/JaimeAlonsoGA/simic-monorepo/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/si-mic)](https://pypi.org/project/si-mic/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-Works with any video call platform: Google Meet, Zoom, Teams, Telegram, Discord, Slack huddles.
+**Record any meeting on Linux, get a Markdown transcript in your Obsidian vault.**
+Press record in the simic window — or `simic start` in a terminal — when the call begins,
+and stop when it ends. A notification tells you when the note is ready.
 
-![tapeback in Obsidian](docs/obsidian-screenshot.png)
+- **Any call app.** simic records what your computer plays and what your mic hears, via
+  PipeWire/PulseAudio — Google Meet, Zoom, Teams, Telegram, Discord, Slack huddles.
+- **Private by default.** Whisper transcribes on your machine. Nothing leaves it unless you
+  opt into a remote transcription or summary provider.
+- **Built for hour-long meetings.** Light MP3 capture (~60 MB per hour), deleted once the
+  note exists; a recording is never lost to a crash, a Ctrl+C or a failed run.
 
 ## Features
 
-- **Live transcription** (opt-in): read the transcript while the meeting is still going — Whisper transcribes in the background every 60 seconds (set `TAPEBACK_LIVE=true`)
+- **Live transcription** (opt-in): read the transcript while the meeting is still going — Whisper transcribes in the background every 60 seconds (set `SIMIC_LIVE=true`)
 - **Platform-agnostic**: captures OS-level audio, works with any app
-- **Light recordings, transcript only**: each channel is captured as 64 kbps MP3 — about 60 MB for an hour-long meeting — and deleted once the note is written. `TAPEBACK_KEEP_AUDIO=true` archives it in the vault instead
-- **Nothing lost**: Ctrl+C, a recorder that dies mid-meeting, a failed or interrupted run — the recording stays until a note exists. `tapeback status` lists what is pending, `tapeback recover` finishes it
+- **Light recordings, transcript only**: each channel is captured as 64 kbps MP3 — about 60 MB for an hour-long meeting — and deleted once the note is written. `SIMIC_KEEP_AUDIO=true` archives it in the vault instead
+- **Nothing lost**: Ctrl+C, a recorder that dies mid-meeting, a failed or interrupted run — the recording stays until a note exists. `simic status` lists what is pending, `simic recover` finishes it
 - **Local transcription**: faster-whisper on CPU (default) or CUDA GPU
-- **Optional remote STT**: set `TAPEBACK_STT_BACKEND=openai` to use a remote transcription backend instead of local Whisper. OpenAI is the only remote backend today (requires `tapeback[stt]` + `TAPEBACK_STT_API_KEY`; meeting audio leaves the machine). Uploads retry on timeouts/transient errors with status heartbeats; finished chunks are cached so `tapeback process` on the same WAV only re-uploads what is missing.
+- **Optional remote STT**: set `SIMIC_STT_BACKEND=openai` to use a remote transcription backend instead of local Whisper. OpenAI is the only remote backend today (requires `si-mic[stt]` + `SIMIC_STT_API_KEY`; meeting audio leaves the machine). Uploads retry on timeouts/transient errors with status heartbeats; finished chunks are cached so `simic process` on the same WAV only re-uploads what is missing.
 - **Speaker diarization**: pyannote identifies who said what
 - **Stereo channel separation**: your mic (left) vs. others (right) for accurate "You" attribution
 - **Obsidian-native output**: Markdown with YAML frontmatter, a wikilink to the audio when it is kept
 - **LLM summarization**: Anthropic, OpenAI, Groq, Gemini, DeepSeek, OpenRouter, Qwen (with automatic provider fallback)
-- **A window**: `tapeback ui` records, follows each recording to its note and sets tapeback up — no terminal, no `.env` to edit
+- **A window**: `simic ui` records, follows each recording to its note and sets simic up — no terminal, no `.env` to edit
 - **System tray**: start/stop recording from the tray icon, no terminal needed
-- **CLI-first**: `tapeback start`, Ctrl+C to stop, done — the terminal is yours again at once; the note is made in the background, one meeting at a time
+- **CLI-first**: `simic start`, Ctrl+C to stop, done — the terminal is yours again at once; the note is made in the background, one meeting at a time
+- **Health checks**: `simic doctor` before a meeting; during one, warnings when a channel stops recording or the other side goes silent
 
-tapeback is modular — the base package handles recording and transcription.
+simic is modular — the base package handles recording and transcription.
 Speaker diarization and LLM summaries are optional and installed separately.
 
 ## Installation
 
+The quickest way, on any distribution, is from PyPI with
+[uv](https://docs.astral.sh/uv/) — see [pip / uv](#pip--uv) below:
+
+```bash
+uv tool install si-mic        # the package is si-mic, the command is simic
+```
+
 ### Arch Linux (AUR)
 
 ```bash
-yay -S tapeback                              # recording + transcription
-yay -S tapeback tapeback-tray                # + system tray icon
-yay -S tapeback tapeback-llm                 # + LLM summaries
-yay -S tapeback tapeback-diarize             # + speaker diarization
-yay -S tapeback tapeback-cuda                # + GPU transcription on CUDA 13 systems
-yay -S tapeback tapeback-tray tapeback-llm tapeback-diarize tapeback-cuda  # everything
+yay -S simic                              # recording + transcription
+yay -S simic simic-tray                # + system tray icon
+yay -S simic simic-llm                 # + LLM summaries
+yay -S simic simic-diarize             # + speaker diarization
+yay -S simic simic-cuda                # + GPU transcription on CUDA 13 systems
+yay -S simic simic-tray simic-llm simic-diarize simic-cuda  # everything
 ```
 
 All system dependencies (ffmpeg, PipeWire) are installed automatically.
@@ -46,18 +60,18 @@ All system dependencies (ffmpeg, PipeWire) are installed automatically.
 ### Ubuntu / Debian (.deb)
 
 Pre-built `.deb` packages are attached to every
-[GitHub Release](https://github.com/yastcher/tapeback/releases). Pick a version
+[GitHub Release](https://github.com/JaimeAlonsoGA/simic-monorepo/releases). Pick a version
 (see the releases page for the current one), download, install:
 
 ```bash
-wget https://github.com/yastcher/tapeback/releases/download/v0.9.10/tapeback_0.9.10_amd64.deb
-sudo apt install ./tapeback_0.9.10_amd64.deb
+wget https://github.com/JaimeAlonsoGA/simic-monorepo/releases/download/v0.9.10/simic_0.9.10_amd64.deb
+sudo apt install ./simic_0.9.10_amd64.deb
 
 # Optional extras:
-sudo apt install ./tapeback-tray_0.9.10_all.deb       # tray icon
-sudo apt install ./tapeback-llm_0.9.10_all.deb        # LLM summaries
-sudo apt install ./tapeback-diarize_0.9.10_all.deb    # speaker diarization
-sudo apt install ./tapeback-cuda_0.9.10_all.deb       # GPU transcription on CUDA 13
+sudo apt install ./simic-tray_0.9.10_all.deb       # tray icon
+sudo apt install ./simic-llm_0.9.10_all.deb        # LLM summaries
+sudo apt install ./simic-diarize_0.9.10_all.deb    # speaker diarization
+sudo apt install ./simic-cuda_0.9.10_all.deb       # GPU transcription on CUDA 13
 ```
 
 The base package bundles its own Python interpreter (from
@@ -81,59 +95,62 @@ sudo apt install python3 pipx ffmpeg pulseaudio-utils
 sudo dnf install python3 pipx ffmpeg pipewire-pulseaudio
 ```
 
-Then install tapeback:
+Then install simic:
 
 ```bash
-uv tool install tapeback                          # recording + transcription
-uv tool install "tapeback[tray]"                  # + system tray icon
-uv tool install "tapeback[stt]"                   # + remote OpenAI STT
-uv tool install "tapeback[llm]"                   # + LLM summaries (also installs openai)
-uv tool install "tapeback[diarize]"               # + speaker diarization
-uv tool install "tapeback[tray,stt,llm,diarize]"  # everything
+uv tool install si-mic                          # recording + transcription
+uv tool install "si-mic[tray]"                  # + system tray icon
+uv tool install "si-mic[stt]"                   # + remote OpenAI STT
+uv tool install "si-mic[llm]"                   # + LLM summaries (also installs openai)
+uv tool install "si-mic[diarize]"               # + speaker diarization
+uv tool install "si-mic[tray,stt,llm,diarize]"  # everything
 ```
 
-`tapeback[stt]` installs the openai SDK for remote transcription.
-`tapeback[llm]` also installs that SDK (plus anthropic), so remote STT works if
+`si-mic[stt]` installs the openai SDK for remote transcription.
+`si-mic[llm]` also installs that SDK (plus anthropic), so remote STT works if
 you already have the LLM extra.
 
 ### pipx or Nix
 
 ```bash
 # pipx
-pipx install tapeback
-pipx install "tapeback[tray,llm,diarize]"         # everything
+pipx install si-mic
+pipx install "si-mic[tray,llm,diarize]"         # everything
 
 # Nix
-nix run github:yastcher/tapeback                  # basic
-nix run github:yastcher/tapeback#tray             # + system tray icon
-nix run github:yastcher/tapeback#llm              # + LLM summaries
-nix run github:yastcher/tapeback#diarize          # + speaker diarization
-nix run github:yastcher/tapeback#full             # everything
+nix run github:JaimeAlonsoGA/simic-monorepo                  # basic
+nix run github:JaimeAlonsoGA/simic-monorepo#tray             # + system tray icon
+nix run github:JaimeAlonsoGA/simic-monorepo#llm              # + LLM summaries
+nix run github:JaimeAlonsoGA/simic-monorepo#diarize          # + speaker diarization
+nix run github:JaimeAlonsoGA/simic-monorepo#full             # everything
 ```
 
 ## Quick start
 
 ```bash
-tapeback doctor                    # once: is everything a meeting needs in place?
-tapeback start                     # start recording, Ctrl+C to stop
+simic doctor                    # once: is everything a meeting needs in place?
+simic start                     # start recording, Ctrl+C to stop
 ```
 
-That's it. The transcript is saved to `~/code/obsidian/meetings/` and the recording is
+Prefer a window? `simic ui --install` adds simic to your applications menu — see
+[Window](#window).
+
+That's it. The transcript is saved to `~/simic/meetings/` and the recording is
 deleted. While it records, the terminal shows how long and how much has been captured
 (`● REC 12:34  monitor 5.8 MB  mic 5.8 MB`), and warns if a channel stops being written,
 if the other side has been silent for three minutes (the call may be playing on an
-output tapeback is not recording), or if the disk cannot hold two hours of meeting.
+output simic is not recording), or if the disk cannot hold two hours of meeting.
 Ctrl+C gives the terminal back at once: the meeting is transcribed in the background,
-`tapeback status` shows how much is left (`transcribe mic: 40% (24:00 / 1:00:00), about
+`simic status` shows how much is left (`transcribe mic: 40% (24:00 / 1:00:00), about
 18 min left`), and a desktop notification says when the note is ready — or why not.
 Meetings stopped back to back are transcribed one after the other, never at once.
-`tapeback start --wait` transcribes in the foreground instead.
+`simic start --wait` transcribes in the foreground instead.
 
 To save to your Obsidian vault instead:
 
 ```bash
-mkdir -p ~/.config/tapeback
-echo 'TAPEBACK_VAULT_PATH=~/Documents/obsidian/vault' > ~/.config/tapeback/.env
+mkdir -p ~/.config/simic
+echo 'SIMIC_VAULT_PATH=~/Documents/obsidian/vault' > ~/.config/simic/.env
 ```
 
 **Tip:** if you always meet in one language, pin it — auto-detection can misfire on a
@@ -141,7 +158,7 @@ channel that starts silent (and even hallucinate). English terms inside another 
 still transcribe fine:
 
 ```bash
-TAPEBACK_LANGUAGE=en tapeback start          # or add TAPEBACK_LANGUAGE=en to .env
+SIMIC_LANGUAGE=en simic start          # or add SIMIC_LANGUAGE=en to .env
 ```
 
 ## System tray
@@ -149,23 +166,23 @@ TAPEBACK_LANGUAGE=en tapeback start          # or add TAPEBACK_LANGUAGE=en to .e
 Run without a terminal — right-click the tray icon to start/stop recording:
 
 ```bash
-tapeback tray
+simic tray
 ```
 
 Icon color shows the current state:
 **gray** = idle, **red** = recording, **orange** = processing.
 
-To autostart on login, create `~/.config/autostart/tapeback-tray.desktop`:
+To autostart on login, create `~/.config/autostart/simic-tray.desktop`:
 
 ```ini
 [Desktop Entry]
-Name=tapeback
-Exec=tapeback tray
+Name=simic
+Exec=simic tray
 Type=Application
 X-GNOME-Autostart-enabled=true
 ```
 
-tapeback's tray speaks the StatusNotifierItem D-Bus protocol directly — no
+simic's tray speaks the StatusNotifierItem D-Bus protocol directly — no
 pystray, no GTK, no XEmbed. KDE Plasma, Hyprland (with waybar), and Sway
 (with waybar/eww) display it out of the box on both X11 and Wayland.
 
@@ -184,15 +201,14 @@ sudo dnf install gnome-shell-extension-appindicator
 
 Open the **Extensions** app, enable **Ubuntu AppIndicators** (or
 **AppIndicator and KStatusNotifierItem Support**), log out + back in.
-`tapeback tray` prints this hint to stderr on startup if it detects an
-affected session. See [issue #3](https://github.com/yastcher/tapeback/issues/3)
-for background.
+`simic tray` prints this hint to stderr on startup if it detects an
+affected session.
 
 ## Window
 
 ```bash
-tapeback ui              # open it
-tapeback ui --install    # once: add tapeback to the applications menu
+simic ui              # open it
+simic ui --install    # once: add simic to the applications menu
 ```
 
 Two pages. **Record**: one button, the time, and every recording after it — being
@@ -200,13 +216,13 @@ transcribed (with the stage it is at), not transcribed yet (one click finishes i
 the transcripts already written, newest first, five at a time. A transcript opens in
 Obsidian when it is installed, otherwise in the default app for `.md`. **Settings**:
 the vault and the folder inside it, which output and microphone are recorded, how it is
-transcribed, speakers, and the summary. Each section is marked with what `tapeback
+transcribed, speakers, and the summary. Each section is marked with what `simic
 doctor` says of it, and a problem that would stop a recording shows as a banner on top.
 Light or dark and the accent colour follow the desktop.
 
-A change is saved the moment it is made, into `~/.config/tapeback/.env` — the file every
+A change is saved the moment it is made, into `~/.config/simic/.env` — the file every
 command reads, so the window and the CLI always agree. Lines the window does not offer
-stay as they are. A setting fixed by a `TAPEBACK_*` environment variable is greyed out:
+stay as they are. A setting fixed by a `SIMIC_*` environment variable is greyed out:
 the variable outranks the file. The window shows what the CLI keeps on disk, so a
 recording started in a terminal appears in it, and closing it stops nothing.
 
@@ -219,14 +235,14 @@ sudo dnf install python3-gobject libadwaita          # Fedora
 sudo pacman -S python-gobject libadwaita             # Arch
 ```
 
-Install tapeback where it can see them: `pipx install --system-site-packages tapeback`,
+Install simic where it can see them: `pipx install --system-site-packages simic`,
 or a venv made with `python3 -m venv --system-site-packages`. The `.deb` and AUR packages
 bundle their own interpreter and do not ship the window yet.
 
 ## Speaker diarization
 
 Speaker diarization identifies who said what in the recording. Without it,
-tapeback uses stereo channels: your mic is labeled "You", everything else
+simic uses stereo channels: your mic is labeled "You", everything else
 is labeled "Other".
 
 To enable diarization, you need a HuggingFace token with access to pyannote models:
@@ -235,10 +251,10 @@ To enable diarization, you need a HuggingFace token with access to pyannote mode
 2. Accept license at [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
 3. Accept license at [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0)
 4. Create token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
-5. Add to `~/.config/tapeback/.env`:
+5. Add to `~/.config/simic/.env`:
 
 ```bash
-TAPEBACK_HF_TOKEN=hf_your_token_here
+SIMIC_HF_TOKEN=hf_your_token_here
 ```
 
 > First run downloads the pyannote model (~1 GB). An NVIDIA GPU is strongly
@@ -246,13 +262,13 @@ TAPEBACK_HF_TOKEN=hf_your_token_here
 
 ## LLM summarization
 
-After transcription, tapeback can add a brief summary, action items, and key
+After transcription, simic can add a brief summary, action items, and key
 decisions using an LLM.
 
-Set an API key for at least one provider in `~/.config/tapeback/.env`:
+Set an API key for at least one provider in `~/.config/simic/.env`:
 
 ```bash
-TAPEBACK_LLM_PROVIDER=gemini
+SIMIC_LLM_PROVIDER=gemini
 GEMINI_API_KEY=...
 ```
 
@@ -266,23 +282,23 @@ GEMINI_API_KEY=...
 | `deepseek` | `DEEPSEEK_API_KEY` | deepseek-chat |
 | `qwen` | `DASHSCOPE_API_KEY` | qwen-turbo |
 
-If the primary provider fails, tapeback automatically tries the next available
+If the primary provider fails, simic automatically tries the next available
 provider (any provider with an API key set).
 
 ### PII masking
 
 By default, recording, transcription and diarization stay on your machine.
 Summarization is the usual off-machine path: a text request to an LLM provider.
-If that bothers you, leave summarization off (`TAPEBACK_SUMMARIZE=false`) or turn
+If that bothers you, leave summarization off (`SIMIC_SUMMARIZE=false`) or turn
 on masking.
 
 **Opt-in remote STT is a second outbound path.** With
-`TAPEBACK_STT_BACKEND=openai`, meeting audio is uploaded to OpenAI.
+`SIMIC_STT_BACKEND=openai`, meeting audio is uploaded to OpenAI.
 PII masking cannot apply there — it only rewrites text before summarization.
 Keep the default (`local`) unless you accept that trade-off.
 
 ```bash
-TAPEBACK_MASK_PII=true
+SIMIC_MASK_PII=true
 ```
 
 Emails and phone numbers are then replaced with `[EMAIL_1]` / `[PHONE_1]`
@@ -295,7 +311,7 @@ aloud in meetings is names, not email addresses — so on a typical transcript t
 two built-in rules match nothing at all. The part that carries is your own list:
 
 ```bash
-TAPEBACK_MASK_TERMS=Ivan Petrov,Ivan,Acme Corp,Project Gemini
+SIMIC_MASK_TERMS=Ivan Petrov,Ivan,Acme Corp,Project Gemini
 ```
 
 Matching is case-insensitive and word-bounded (`Ann` is not masked inside `Anna`),
@@ -305,16 +321,16 @@ refused with a warning — masking those would break speaker attribution and pro
 nothing.
 
 **Matching is literal.** A term is masked in exactly the forms you list. In an
-inflected language every form needs its own entry (`Ivan, Ivana, Ivanu`) — tapeback
+inflected language every form needs its own entry (`Ivan, Ivana, Ivanu`) — simic
 does not guess them, because guessing would silently rewrite unrelated words.
-`TAPEBACK_MASK_PII=true` is a floor, not a guarantee that the provider sees nothing
+`SIMIC_MASK_PII=true` is a floor, not a guarantee that the provider sees nothing
 personal.
 
 **Check it before you trust it.** `--show-masked` prints exactly what would be sent
 and stops there — no request, no API key needed:
 
 ```bash
-tapeback summarize notes.md --show-masked
+simic summarize notes.md --show-masked
 # stderr: Masked: EMAIL 1, TERM 4
 # stdout: the text that would go to the provider
 ```
@@ -325,25 +341,25 @@ the tally to stderr, so `--show-masked > sent.txt` gives you something to diff.
 ## CLI reference
 
 ```
-tapeback doctor                    Check tools, audio sources, vault, disk, model, speakers and summary before a meeting
-tapeback start [NAME]              Start recording (Ctrl+C to stop; transcribed in the background)
-tapeback stop                      Stop recording from another terminal
-tapeback ui [--install]            The window: record, follow transcriptions, settings
-tapeback tray                      System tray icon
-tapeback process <FILE> [--name N] Transcribe an existing audio file
-tapeback recover [NAME]            Transcribe recordings whose processing failed or was interrupted
-tapeback summarize <FILE>          Add LLM summary to transcript
-tapeback status                    Show what is recording, being transcribed or pending, and settings
+simic doctor                    Check tools, audio sources, vault, disk, model, speakers and summary before a meeting
+simic start [NAME]              Start recording (Ctrl+C to stop; transcribed in the background)
+simic stop                      Stop recording from another terminal
+simic ui [--install]            The window: record, follow transcriptions, settings
+simic tray                      System tray icon
+simic process <FILE> [--name N] Transcribe an existing audio file
+simic recover [NAME]            Transcribe recordings whose processing failed or was interrupted
+simic summarize <FILE>          Add LLM summary to transcript
+simic status                    Show what is recording, being transcribed or pending, and settings
 ```
 
 ```bash
-tapeback start --wait              # transcribe in the foreground once stopped (also: tapeback stop --wait)
-tapeback start --no-live           # one-shot override: skip live transcription even if TAPEBACK_LIVE=true
-tapeback start --no-diarize        # skip speaker identification
-tapeback start --no-summarize      # skip LLM summary
-tapeback process meeting.mp3 --name "weekly-standup"
-tapeback summarize notes.md --provider gemini --model gemini-2.5-pro
-tapeback summarize notes.md --show-masked   # print what would be sent, send nothing
+simic start --wait              # transcribe in the foreground once stopped (also: simic stop --wait)
+simic start --no-live           # one-shot override: skip live transcription even if SIMIC_LIVE=true
+simic start --no-diarize        # skip speaker identification
+simic start --no-summarize      # skip LLM summary
+simic process meeting.mp3 --name "weekly-standup"
+simic summarize notes.md --provider gemini --model gemini-2.5-pro
+simic summarize notes.md --show-masked   # print what would be sent, send nothing
 ```
 
 ## Output format
@@ -360,7 +376,7 @@ date: 2026-03-23
 time: "14:30"
 duration: "01:23:45"
 language: en
-audio: "[[attachments/audio/2026-03-23_14-30-00.mp3]]"   # only with TAPEBACK_KEEP_AUDIO=true
+audio: "[[attachments/audio/2026-03-23_14-30-00.mp3]]"   # only with SIMIC_KEEP_AUDIO=true
 tags:
   - meeting
   - transcript
@@ -406,103 +422,103 @@ Brief overview of the meeting.
 <details>
 <summary><h2>Configuration reference</h2></summary>
 
-All settings via environment variables (prefix `TAPEBACK_`) or
-`~/.config/tapeback/.env` file.
+All settings via environment variables (prefix `SIMIC_`) or
+`~/.config/simic/.env` file.
 
 ### Core
 
 | Variable | Default | Description |
 |---|---|---|
-| `TAPEBACK_VAULT_PATH` | `~/code/obsidian` | Path to output directory (Obsidian vault) |
-| `TAPEBACK_MEETINGS_DIR` | `meetings` | Subdirectory of the vault for transcripts; a path outside the vault is refused |
-| `TAPEBACK_ATTACHMENTS_DIR` | `attachments/audio` | Subdirectory of the vault for audio kept with `TAPEBACK_KEEP_AUDIO`; a path outside the vault is refused |
+| `SIMIC_VAULT_PATH` | `~/simic` | Path to output directory (Obsidian vault) |
+| `SIMIC_MEETINGS_DIR` | `meetings` | Subdirectory of the vault for transcripts; a path outside the vault is refused |
+| `SIMIC_ATTACHMENTS_DIR` | `attachments/audio` | Subdirectory of the vault for audio kept with `SIMIC_KEEP_AUDIO`; a path outside the vault is refused |
 
 ### Transcription
 
 | Variable | Default | Description |
 |---|---|---|
-| `TAPEBACK_STT_BACKEND` | `local` | `local` (faster-whisper on this machine) or a remote backend id. Today: `openai` (OpenAI Audio Transcriptions API). Remote STT requires `tapeback[stt]` (or `tapeback[llm]`, which also installs the openai SDK) and `TAPEBACK_STT_API_KEY` (falls back to `OPENAI_API_KEY`, or `TAPEBACK_LLM_API_KEY` with `TAPEBACK_LLM_PROVIDER=openai`); meeting audio then leaves the machine |
-| `TAPEBACK_STT_MODEL` | *(backend default)* | Model for the active STT backend. **Local** default `large-v3-turbo` (`tiny`/`base`/`small`/`medium`/`large-v3-turbo`). **OpenAI** default `whisper-1` (timestamps + local pyannote; size-limited chunks only). Also: `gpt-transcribe` (modern text quality; local diarize skipped; soft target ≤600s per upload, hard API cap 1500s), `gpt-4o-transcribe-diarize` (remote speakers; local diarize skipped; soft target ≤600s, hard API cap 1400s). Speaker labels from `gpt-4o-transcribe-diarize` may not stay consistent across separately uploaded chunks on long recordings. Long meetings are sliced under the 25 MiB size cap, the soft target, and the hard API duration cap. Deprecated alias: `TAPEBACK_WHISPER_MODEL` |
-| `TAPEBACK_STT_API_KEY` | *(empty)* | API key for remote STT. Falls back to `OPENAI_API_KEY` then the LLM OpenAI key |
-| `TAPEBACK_STT_CONCURRENCY` | `4` | Max parallel uploads when a long recording is sliced (not used for the diarize model, which uploads slices sequentially) |
-| `TAPEBACK_STT_TIMEOUT` | `900` | Read/write timeout (seconds) for each remote STT HTTP request. Connect timeout is fixed at 10s. Needs to be long enough for diarize slices (~10 min of audio often needs several minutes of server time). App-level retries are separate from the OpenAI SDK (SDK retries are disabled). |
-| `TAPEBACK_STT_MAX_RETRIES` | `5` | App-level retries per chunk after a timeout, connection error, or HTTP 408/429/5xx/529 |
-| `TAPEBACK_STT_RETRY_BASE_DELAY` | `5` | Exponential backoff base between remote STT retries (capped at 60s) |
-| `TAPEBACK_STT_HEARTBEAT_SECONDS` | `15` | While an upload is in flight, emit a status line this often so a long API wait does not look hung |
-| `TAPEBACK_STT_FFMPEG_TIMEOUT` | `120` | Wall-clock timeout for ffmpeg encode/slice used to prepare remote uploads |
-| `TAPEBACK_LANGUAGE` | `auto` | Language code (`auto` for auto-detection, or `en`, `ru`, `fr`, etc.) |
-| `TAPEBACK_DEVICE` | `cpu` | `cuda` or `cpu`. Local backend only |
-| `TAPEBACK_GPU_TELEMETRY` | `true` | Sample GPU clocks/temperature during transcription and print a one-line summary per stage. Observation only — tapeback never changes clock or power caps. No-op without `nvidia-smi` or on `cpu` |
-| `TAPEBACK_RESUME_CACHE` | `true` | Reuse a channel already transcribed from the same audio with the same output-affecting settings, so an interrupted run does not redo finished work. Changing the model, glossary, language or any decoding setting invalidates it |
-| `TAPEBACK_RESUME_CACHE_DIR` | *(XDG)* | Where reusable channel results go. Default `~/.local/share/tapeback/resume` |
-| `TAPEBACK_ISOLATE_TRANSCRIPTION` | `true` | Run transcription in a child process. A CUDA out-of-memory permanently leaks VRAM inside the process it happens in — a child can simply exit and the kernel reclaims it. Costs one process start and model load per run; set `false` to transcribe in-process |
-| `TAPEBACK_MIN_FREE_VRAM_MIB` | `1200` | Use the CPU rather than attempting a CUDA load below this much free VRAM. The smallest measured configuration needs ~1115 MiB |
-| `TAPEBACK_THERMAL_CLAMP_CHECK` | `true` | Look for a GPU thermal clamp before each transcription stage. One `nvidia-smi` query, retaken per stage — which is what lets a run return to the GPU once the card recovers. See "Transcription is suddenly very slow" below |
-| `TAPEBACK_THERMAL_CLAMP_WAIT` | `0` | Seconds to wait for the clamp to release before giving up on the GPU for this stage. Default is not to wait: the clamp clears on *system* idle and the shortest release measured was 451 s, so any tolerable wait rarely succeeds while the CPU would already be transcribing. Raise it only if the machine will genuinely be idle |
-| `TAPEBACK_THERMAL_CLAMP_CPU_FALLBACK` | `true` | Transcribe on CPU when the clamp has not released. A clamped GPU measured ~8× slower than the CPU, so falling back is the fast path, not a degradation |
-| `TAPEBACK_STAGE_PAUSE_SECONDS` | `0` | Idle gap after each transcription stage, to shed heat instead of driving the chassis into a clamp. Try `60` on a laptop that clamps during long recordings |
-| `TAPEBACK_RUN_LOG` | `true` | Write one JSON record per run (settings used, every status line, outcome) so a failed or interrupted run can be diagnosed afterwards. Never contains credentials |
-| `TAPEBACK_RUN_LOG_DIR` | *(XDG)* | Where run records go. Default `~/.local/share/tapeback/runs` (honours `XDG_DATA_HOME`). Oldest records are pruned past 200 |
-| `TAPEBACK_COMPUTE_TYPE` | `auto` | `auto`, `int8_float16`, `float16`, `int8`, or `float32`. `auto` → `int8_float16` on CUDA, `int8` on CPU. **`int8_float16` is both faster and smaller than `float16`** — measured on a GTX 1650 Ti with large-v3-turbo: 14.16× vs 3.90× real time, 1115 MiB vs 2139 MiB, with no quality cost. ctranslate2 falls back on its own if your GPU lacks the type |
-| `TAPEBACK_BEAM_SIZE` | `4` | Whisper beam search width (lower = faster, slightly less accurate) |
-| `TAPEBACK_CPU_THREADS` | `0` | Threads Whisper decodes with on the CPU. `0` is faster-whisper's default of 4, whatever the machine has |
-| `TAPEBACK_TEMPERATURE` | `[0.0, 0.2, 0.4, 0.6, 0.8, 1.0]` | Temperature fallback ladder. The high steps break Whisper out of hallucination loops on noisy audio — don't shorten unless your input is clean (shortening can cause repeat loops: slower *and* worse) |
-| `TAPEBACK_BATCH_SIZE` | `0` | Batched inference (faster-whisper `BatchedInferencePipeline`) — processes VAD segments in parallel, several× faster on GPU. `0` = off; try `8`. On small GPUs (≤4 GB) it may OOM even at `4` — use `2`, pair with `TAPEBACK_COMPUTE_TYPE=int8`, or keep `0`. OOM falls back to CPU automatically. **Batching silently ignores `no_speech_threshold`, `condition_on_previous_text` and all but the first `temperature` value** — tapeback warns which ones when you enable it |
-| `TAPEBACK_CHUNK_LENGTH` | `30` | Seconds of audio consumed per decode window. **Do not lower this to fight hallucinations.** Whisper's encoder is fixed at 30 s and every window is zero-padded back to it, so a smaller value does not make a pass cheaper — it only needs more of them. Measured on a 145 s file: `2` → 390.6 s, `7` → 116.8 s, `30` → 41.4 s |
-| `TAPEBACK_NO_SPEECH_THRESHOLD` | `0.4` | Whisper silence-rejection threshold (lower = more aggressive; suppresses training-data hallucinations on pauses) |
-| `TAPEBACK_LANGUAGE_DETECTION_SEGMENTS` | `1` | Segments probed before deciding the language; raise (e.g. `4`) if a channel that starts silent gets the wrong language |
-| `TAPEBACK_MULTILINGUAL` | `false` | Per-segment language detection for mixed-language recordings (code-switching). Less stable than a fixed `TAPEBACK_LANGUAGE` |
-| `TAPEBACK_HALLUCINATION_SILENCE_THRESHOLD` | *(off)* | Seconds; skip silent gaps when a hallucination is detected. ⚠ Triggers per-segment re-processing — can be **much slower** on pause-heavy channels (e.g. the mic). Leave off unless it measurably helps your audio |
-| `TAPEBACK_HOTWORDS` | *(project glossary)* | Comma-separated terms decoding is biased towards — see [`src/tapeback/glossary.py`](src/tapeback/glossary.py). Whisper mangles English terms embedded in Russian speech ("tapeback" → "ты пупа ты бэк"); with the glossary it comes back as "tapeback". Replace with your own domain vocabulary; empty disables the bias. **Keep it under ~223 tokens (~670 characters)** — faster-whisper silently truncates beyond that, so extra terms stop working with no warning |
-| `TAPEBACK_VAD_FILTER` | `true` | Silero voice-activity detection before decoding. Load-bearing: it is a large part of why Whisper stopped hallucinating on silence. Turning it off is not a speed optimisation |
-| `TAPEBACK_CONDITION_ON_PREVIOUS_TEXT` | `false` | Feed the previous window's output back as a prompt. Whisper's own default is `true`; off here because it makes repeat loops much stickier |
-| `TAPEBACK_PAUSE_THRESHOLD` | `1.0` | Seconds; split segments on silence gaps >= this |
-| `TAPEBACK_GATE_MIC_SILENCE` | `true` | Silence the mic channel where you're only listening (mic quiet / monitor dominant) before transcription, so Whisper doesn't loop on the pauses. Dual-channel pipeline only |
+| `SIMIC_STT_BACKEND` | `local` | `local` (faster-whisper on this machine) or a remote backend id. Today: `openai` (OpenAI Audio Transcriptions API). Remote STT requires `si-mic[stt]` (or `si-mic[llm]`, which also installs the openai SDK) and `SIMIC_STT_API_KEY` (falls back to `OPENAI_API_KEY`, or `SIMIC_LLM_API_KEY` with `SIMIC_LLM_PROVIDER=openai`); meeting audio then leaves the machine |
+| `SIMIC_STT_MODEL` | *(backend default)* | Model for the active STT backend. **Local** default `large-v3-turbo` (`tiny`/`base`/`small`/`medium`/`large-v3-turbo`). **OpenAI** default `whisper-1` (timestamps + local pyannote; size-limited chunks only). Also: `gpt-transcribe` (modern text quality; local diarize skipped; soft target ≤600s per upload, hard API cap 1500s), `gpt-4o-transcribe-diarize` (remote speakers; local diarize skipped; soft target ≤600s, hard API cap 1400s). Speaker labels from `gpt-4o-transcribe-diarize` may not stay consistent across separately uploaded chunks on long recordings. Long meetings are sliced under the 25 MiB size cap, the soft target, and the hard API duration cap. Deprecated alias: `SIMIC_WHISPER_MODEL` |
+| `SIMIC_STT_API_KEY` | *(empty)* | API key for remote STT. Falls back to `OPENAI_API_KEY` then the LLM OpenAI key |
+| `SIMIC_STT_CONCURRENCY` | `4` | Max parallel uploads when a long recording is sliced (not used for the diarize model, which uploads slices sequentially) |
+| `SIMIC_STT_TIMEOUT` | `900` | Read/write timeout (seconds) for each remote STT HTTP request. Connect timeout is fixed at 10s. Needs to be long enough for diarize slices (~10 min of audio often needs several minutes of server time). App-level retries are separate from the OpenAI SDK (SDK retries are disabled). |
+| `SIMIC_STT_MAX_RETRIES` | `5` | App-level retries per chunk after a timeout, connection error, or HTTP 408/429/5xx/529 |
+| `SIMIC_STT_RETRY_BASE_DELAY` | `5` | Exponential backoff base between remote STT retries (capped at 60s) |
+| `SIMIC_STT_HEARTBEAT_SECONDS` | `15` | While an upload is in flight, emit a status line this often so a long API wait does not look hung |
+| `SIMIC_STT_FFMPEG_TIMEOUT` | `120` | Wall-clock timeout for ffmpeg encode/slice used to prepare remote uploads |
+| `SIMIC_LANGUAGE` | `auto` | Language code (`auto` for auto-detection, or `en`, `ru`, `fr`, etc.) |
+| `SIMIC_DEVICE` | `cpu` | `cuda` or `cpu`. Local backend only |
+| `SIMIC_GPU_TELEMETRY` | `true` | Sample GPU clocks/temperature during transcription and print a one-line summary per stage. Observation only — simic never changes clock or power caps. No-op without `nvidia-smi` or on `cpu` |
+| `SIMIC_RESUME_CACHE` | `true` | Reuse a channel already transcribed from the same audio with the same output-affecting settings, so an interrupted run does not redo finished work. Changing the model, glossary, language or any decoding setting invalidates it |
+| `SIMIC_RESUME_CACHE_DIR` | *(XDG)* | Where reusable channel results go. Default `~/.local/share/simic/resume` |
+| `SIMIC_ISOLATE_TRANSCRIPTION` | `true` | Run transcription in a child process. A CUDA out-of-memory permanently leaks VRAM inside the process it happens in — a child can simply exit and the kernel reclaims it. Costs one process start and model load per run; set `false` to transcribe in-process |
+| `SIMIC_MIN_FREE_VRAM_MIB` | `1200` | Use the CPU rather than attempting a CUDA load below this much free VRAM. The smallest measured configuration needs ~1115 MiB |
+| `SIMIC_THERMAL_CLAMP_CHECK` | `true` | Look for a GPU thermal clamp before each transcription stage. One `nvidia-smi` query, retaken per stage — which is what lets a run return to the GPU once the card recovers. See "Transcription is suddenly very slow" below |
+| `SIMIC_THERMAL_CLAMP_WAIT` | `0` | Seconds to wait for the clamp to release before giving up on the GPU for this stage. Default is not to wait: the clamp clears on *system* idle and the shortest release measured was 451 s, so any tolerable wait rarely succeeds while the CPU would already be transcribing. Raise it only if the machine will genuinely be idle |
+| `SIMIC_THERMAL_CLAMP_CPU_FALLBACK` | `true` | Transcribe on CPU when the clamp has not released. A clamped GPU measured ~8× slower than the CPU, so falling back is the fast path, not a degradation |
+| `SIMIC_STAGE_PAUSE_SECONDS` | `0` | Idle gap after each transcription stage, to shed heat instead of driving the chassis into a clamp. Try `60` on a laptop that clamps during long recordings |
+| `SIMIC_RUN_LOG` | `true` | Write one JSON record per run (settings used, every status line, outcome) so a failed or interrupted run can be diagnosed afterwards. Never contains credentials |
+| `SIMIC_RUN_LOG_DIR` | *(XDG)* | Where run records go. Default `~/.local/share/simic/runs` (honours `XDG_DATA_HOME`). Oldest records are pruned past 200 |
+| `SIMIC_COMPUTE_TYPE` | `auto` | `auto`, `int8_float16`, `float16`, `int8`, or `float32`. `auto` → `int8_float16` on CUDA, `int8` on CPU. **`int8_float16` is both faster and smaller than `float16`** — measured on a GTX 1650 Ti with large-v3-turbo: 14.16× vs 3.90× real time, 1115 MiB vs 2139 MiB, with no quality cost. ctranslate2 falls back on its own if your GPU lacks the type |
+| `SIMIC_BEAM_SIZE` | `4` | Whisper beam search width (lower = faster, slightly less accurate) |
+| `SIMIC_CPU_THREADS` | `0` | Threads Whisper decodes with on the CPU. `0` is faster-whisper's default of 4, whatever the machine has |
+| `SIMIC_TEMPERATURE` | `[0.0, 0.2, 0.4, 0.6, 0.8, 1.0]` | Temperature fallback ladder. The high steps break Whisper out of hallucination loops on noisy audio — don't shorten unless your input is clean (shortening can cause repeat loops: slower *and* worse) |
+| `SIMIC_BATCH_SIZE` | `0` | Batched inference (faster-whisper `BatchedInferencePipeline`) — processes VAD segments in parallel, several× faster on GPU. `0` = off; try `8`. On small GPUs (≤4 GB) it may OOM even at `4` — use `2`, pair with `SIMIC_COMPUTE_TYPE=int8`, or keep `0`. OOM falls back to CPU automatically. **Batching silently ignores `no_speech_threshold`, `condition_on_previous_text` and all but the first `temperature` value** — simic warns which ones when you enable it |
+| `SIMIC_CHUNK_LENGTH` | `30` | Seconds of audio consumed per decode window. **Do not lower this to fight hallucinations.** Whisper's encoder is fixed at 30 s and every window is zero-padded back to it, so a smaller value does not make a pass cheaper — it only needs more of them. Measured on a 145 s file: `2` → 390.6 s, `7` → 116.8 s, `30` → 41.4 s |
+| `SIMIC_NO_SPEECH_THRESHOLD` | `0.4` | Whisper silence-rejection threshold (lower = more aggressive; suppresses training-data hallucinations on pauses) |
+| `SIMIC_LANGUAGE_DETECTION_SEGMENTS` | `1` | Segments probed before deciding the language; raise (e.g. `4`) if a channel that starts silent gets the wrong language |
+| `SIMIC_MULTILINGUAL` | `false` | Per-segment language detection for mixed-language recordings (code-switching). Less stable than a fixed `SIMIC_LANGUAGE` |
+| `SIMIC_HALLUCINATION_SILENCE_THRESHOLD` | *(off)* | Seconds; skip silent gaps when a hallucination is detected. ⚠ Triggers per-segment re-processing — can be **much slower** on pause-heavy channels (e.g. the mic). Leave off unless it measurably helps your audio |
+| `SIMIC_HOTWORDS` | *(project glossary)* | Comma-separated terms decoding is biased towards — see [`src/simic/glossary.py`](src/simic/glossary.py). Whisper mangles English terms embedded in Russian speech ("simic" → "ты пупа ты бэк"); with the glossary it comes back as "simic". Replace with your own domain vocabulary; empty disables the bias. **Keep it under ~223 tokens (~670 characters)** — faster-whisper silently truncates beyond that, so extra terms stop working with no warning |
+| `SIMIC_VAD_FILTER` | `true` | Silero voice-activity detection before decoding. Load-bearing: it is a large part of why Whisper stopped hallucinating on silence. Turning it off is not a speed optimisation |
+| `SIMIC_CONDITION_ON_PREVIOUS_TEXT` | `false` | Feed the previous window's output back as a prompt. Whisper's own default is `true`; off here because it makes repeat loops much stickier |
+| `SIMIC_PAUSE_THRESHOLD` | `1.0` | Seconds; split segments on silence gaps >= this |
+| `SIMIC_GATE_MIC_SILENCE` | `true` | Silence the mic channel where you're only listening (mic quiet / monitor dominant) before transcription, so Whisper doesn't loop on the pauses. Dual-channel pipeline only |
 
 ### Live transcription
 
 | Variable | Default | Description |
 |---|---|---|
-| `TAPEBACK_LIVE` | `false` | Enable live transcription during recording (opt-in; competes with the post-recording pipeline for GPU memory on small cards). Reads the growing recording, so it needs `TAPEBACK_AUDIO_FORMAT=wav` and a `TAPEBACK_SAMPLE_RATE` that is a multiple of 16000 |
-| `TAPEBACK_LIVE_INTERVAL` | `60` | Seconds between transcription cycles |
-| `TAPEBACK_LIVE_OVERLAP` | `2.0` | Seconds of overlap between chunks |
-| `TAPEBACK_LIVE_MIN_CHUNK` | `5.0` | Minimum new audio (seconds) to trigger transcription |
+| `SIMIC_LIVE` | `false` | Enable live transcription during recording (opt-in; competes with the post-recording pipeline for GPU memory on small cards). Reads the growing recording, so it needs `SIMIC_AUDIO_FORMAT=wav` and a `SIMIC_SAMPLE_RATE` that is a multiple of 16000 |
+| `SIMIC_LIVE_INTERVAL` | `60` | Seconds between transcription cycles |
+| `SIMIC_LIVE_OVERLAP` | `2.0` | Seconds of overlap between chunks |
+| `SIMIC_LIVE_MIN_CHUNK` | `5.0` | Minimum new audio (seconds) to trigger transcription |
 
 ### Audio
 
 | Variable | Default | Description |
 |---|---|---|
-| `TAPEBACK_MONITOR_SOURCE` | `auto` | PulseAudio monitor source name |
-| `TAPEBACK_MIC_SOURCE` | `auto` | PulseAudio mic source name |
-| `TAPEBACK_SAMPLE_RATE` | `16000` | Recording sample rate. 16 kHz is what Whisper works at; higher only makes the files bigger |
-| `TAPEBACK_AUDIO_FORMAT` | `mp3` | `mp3` (parecord piped into ffmpeg) or `wav` (parecord alone, about 10x bigger; needed for live transcription) |
-| `TAPEBACK_MP3_BITRATE_K` | `64` | MP3 bitrate per channel, 16–160 kbps. 64 is about 29 MB per hour per channel |
-| `TAPEBACK_NOTIFY` | `true` | Desktop notification (`notify-send`) when a note is ready or could not be made |
-| `TAPEBACK_BACKGROUND` | `true` | Once a recording stops, transcribe it in a detached process (`tapeback recover NAME`) and give the terminal back. Its output goes to `processing.log` in the session directory, which `tapeback status` reads. `--wait` on `start`/`stop` overrides it for one run |
-| `TAPEBACK_KEEP_AUDIO` | `false` | Archive the recording in the vault (`TAPEBACK_ATTACHMENTS_DIR`) and link it from the note. Off: the audio is deleted once the note is written |
-| `TAPEBACK_SESSIONS_DIR` | *(XDG)* | Where recordings in progress live: about 60 MB per hour while recording, plus about 460 MB per hour of temporary files while it is processed. Default `~/.local/state/tapeback/sessions`. An absolute path: `~` is not expanded. Must be private to you (mode `0700`); tapeback refuses one other users can reach. A session that failed to process stays here, so it can be recovered |
-| `TAPEBACK_TIMEZONE` | *(system)* | Time zone for naming a recording, and so for the note's file name, date and time. An IANA name such as `Europe/Madrid`, or `UTC`. Unset: the machine's own zone |
+| `SIMIC_MONITOR_SOURCE` | `auto` | PulseAudio monitor source name |
+| `SIMIC_MIC_SOURCE` | `auto` | PulseAudio mic source name |
+| `SIMIC_SAMPLE_RATE` | `16000` | Recording sample rate. 16 kHz is what Whisper works at; higher only makes the files bigger |
+| `SIMIC_AUDIO_FORMAT` | `mp3` | `mp3` (parecord piped into ffmpeg) or `wav` (parecord alone, about 10x bigger; needed for live transcription) |
+| `SIMIC_MP3_BITRATE_K` | `64` | MP3 bitrate per channel, 16–160 kbps. 64 is about 29 MB per hour per channel |
+| `SIMIC_NOTIFY` | `true` | Desktop notification (`notify-send`) when a note is ready or could not be made |
+| `SIMIC_BACKGROUND` | `true` | Once a recording stops, transcribe it in a detached process (`simic recover NAME`) and give the terminal back. Its output goes to `processing.log` in the session directory, which `simic status` reads. `--wait` on `start`/`stop` overrides it for one run |
+| `SIMIC_KEEP_AUDIO` | `false` | Archive the recording in the vault (`SIMIC_ATTACHMENTS_DIR`) and link it from the note. Off: the audio is deleted once the note is written |
+| `SIMIC_SESSIONS_DIR` | *(XDG)* | Where recordings in progress live: about 60 MB per hour while recording, plus about 460 MB per hour of temporary files while it is processed. Default `~/.local/state/simic/sessions`. An absolute path: `~` is not expanded. Must be private to you (mode `0700`); simic refuses one other users can reach. A session that failed to process stays here, so it can be recovered |
+| `SIMIC_TIMEZONE` | *(system)* | Time zone for naming a recording, and so for the note's file name, date and time. An IANA name such as `Europe/Madrid`, or `UTC`. Unset: the machine's own zone |
 
 ### Speaker diarization
 
 | Variable | Default | Description |
 |---|---|---|
-| `TAPEBACK_DIARIZE` | `true` | Enable speaker diarization |
-| `TAPEBACK_HF_TOKEN` | *(empty)* | HuggingFace token ([setup](#speaker-diarization)) |
-| `TAPEBACK_MAX_SPEAKERS` | *(auto)* | Maximum number of speakers |
-| `TAPEBACK_CLUSTERING_THRESHOLD` | *(pyannote default)* | Speaker-clustering threshold passed to pyannote. Lower splits speakers more readily, higher merges them |
-| `TAPEBACK_SPECTRAL_MERGE_THRESHOLD` | `0.96` | Spectral speaker merging (0 = off; lower merges more aggressively) |
+| `SIMIC_DIARIZE` | `true` | Enable speaker diarization |
+| `SIMIC_HF_TOKEN` | *(empty)* | HuggingFace token ([setup](#speaker-diarization)) |
+| `SIMIC_MAX_SPEAKERS` | *(auto)* | Maximum number of speakers |
+| `SIMIC_CLUSTERING_THRESHOLD` | *(pyannote default)* | Speaker-clustering threshold passed to pyannote. Lower splits speakers more readily, higher merges them |
+| `SIMIC_SPECTRAL_MERGE_THRESHOLD` | `0.96` | Spectral speaker merging (0 = off; lower merges more aggressively) |
 
 ### LLM summarization
 
 | Variable | Default | Description |
 |---|---|---|
-| `TAPEBACK_SUMMARIZE` | `true` | Enable LLM summarization |
-| `TAPEBACK_MASK_PII` | `false` | Mask emails and phone numbers before sending ([details](#pii-masking)) |
-| `TAPEBACK_MASK_TERMS` | *(empty)* | Comma-separated names/terms to mask too (needs `MASK_PII`) |
-| `TAPEBACK_LLM_PROVIDER` | `anthropic` | Primary provider ([list](#llm-summarization)) |
-| `TAPEBACK_LLM_API_KEY` | *(empty)* | API key (or use provider-specific env var) |
-| `TAPEBACK_LLM_MODEL` | *(provider default)* | Override model name |
+| `SIMIC_SUMMARIZE` | `true` | Enable LLM summarization |
+| `SIMIC_MASK_PII` | `false` | Mask emails and phone numbers before sending ([details](#pii-masking)) |
+| `SIMIC_MASK_TERMS` | *(empty)* | Comma-separated names/terms to mask too (needs `MASK_PII`) |
+| `SIMIC_LLM_PROVIDER` | `anthropic` | Primary provider ([list](#llm-summarization)) |
+| `SIMIC_LLM_API_KEY` | *(empty)* | API key (or use provider-specific env var) |
+| `SIMIC_LLM_MODEL` | *(provider default)* | Override model name |
 
 </details>
 
@@ -546,7 +562,7 @@ Lines worth watching:
   clock means the card was held back by heat or its power limit, not by the model. This
   line is a report of what already happened; the *decision* is made before each stage, and
   a card found clamped is skipped in favour of the CPU. Disable the reporting with
-  `TAPEBACK_GPU_TELEMETRY=false`.
+  `SIMIC_GPU_TELEMETRY=false`.
 
 ### A run failed or you interrupted it — what happened?
 
@@ -554,23 +570,23 @@ The recording is still there. A meeting is deleted only once its note exists, so
 that fails, an aborted one, or one cut short by a reboot leaves its session behind:
 
 ```bash
-tapeback status                    # lists recordings being transcribed and not yet transcribed
-tapeback recover                   # transcribes all of them, oldest first
-tapeback recover 2026-10-12_09-00-00
+simic status                    # lists recordings being transcribed and not yet transcribed
+simic recover                   # transcribes all of them, oldest first
+simic recover 2026-10-12_09-00-00
 ```
 
-Every run writes a JSON record to `~/.local/share/tapeback/runs/`:
+Every run writes a JSON record to `~/.local/share/simic/runs/`:
 
 ```bash
-ls -t ~/.local/share/tapeback/runs/ | head
-jq '{outcome, error, config: .config.chunk_length}' ~/.local/share/tapeback/runs/<file>.json
+ls -t ~/.local/share/simic/runs/ | head
+jq '{outcome, error, config: .config.chunk_length}' ~/.local/share/simic/runs/<file>.json
 ```
 
 It holds the settings the run actually used, every status line it printed, and how it
 ended (`completed` / `aborted` / `failed`, with the error for the last one). Useful when
 a transcript looks wrong and you need to know which configuration produced it, or when a
 run died and the terminal is long gone. Credentials are never recorded — the stored
-settings are an explicit allow-list. Disable with `TAPEBACK_RUN_LOG=false`.
+settings are an explicit allow-list. Disable with `SIMIC_RUN_LOG=false`.
 
 ### Transcription is suddenly very slow, and the GPU is not even hot
 
@@ -591,11 +607,11 @@ shared cooler. Three things follow.
 moderate heating, still latched after 900 s once the chassis was saturated, and still
 latched an hour later with the GPU down to 72 °C while a browser kept the CPU busy. If
 you are using the machine, it will not release — so waiting for it is not a strategy, and
-`TAPEBACK_THERMAL_CLAMP_WAIT` defaults to 0.
+`SIMIC_THERMAL_CLAMP_WAIT` defaults to 0.
 
 **The CPU is faster in this state** — 2.39× real time against 0.31× on the clamped GPU.
-tapeback checks before each stage and moves to the CPU, saying so. Disable with
-`TAPEBACK_THERMAL_CLAMP_CPU_FALLBACK=false`.
+simic checks before each stage and moves to the CPU, saying so. Disable with
+`SIMIC_THERMAL_CLAMP_CPU_FALLBACK=false`.
 
 **A run that fell back is not stuck there.** The check is retaken for every stage, each of
 which runs in its own worker process, so a clamp that clears between channels puts the
@@ -610,11 +626,11 @@ nvidia-smi --query-gpu=clocks_event_reasons.active,enforced.power.limit --format
 # 0x0000000000000024,  5.00 W   -> clamped
 ```
 
-To avoid it rather than react to it, set `TAPEBACK_STAGE_PAUSE_SECONDS=60` so long
+To avoid it rather than react to it, set `SIMIC_STAGE_PAUSE_SECONDS=60` so long
 recordings shed heat between channels. The larger lever is the CPU, not the GPU — these
 machines often ship with a sustained CPU power limit well above the chip's class, and
 capping it (or disabling turbo) keeps the whole system out of the clamp. That needs root,
-so tapeback does not do it for you.
+so simic does not do it for you.
 
 ### GPU transcription falls back to CPU on CUDA 13 systems
 
@@ -623,24 +639,24 @@ your system has CUDA 13 (e.g. recent Arch) but faster-whisper's ctranslate2 back
 built against CUDA 12 and can't find `libcublas.so.12` / `libcudnn.so.9`. Diarization
 (PyTorch) still uses the GPU, but transcription drops to slow CPU.
 
-Install the CUDA 12 runtime libraries — tapeback preloads them automatically:
+Install the CUDA 12 runtime libraries — simic preloads them automatically:
 
 ```bash
 # Arch (AUR) — recommended:
-yay -S tapeback-cuda
+yay -S simic-cuda
 
-# Ubuntu/Debian (.deb): install the matching tapeback-cuda_*.deb
+# Ubuntu/Debian (.deb): install the matching simic-cuda_*.deb
 
 # pip / uv install (your own environment):
 uv pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
 
-# AUR/.deb done manually (bundled venv): for Arch use /opt/tapeback/bin/pip,
-# for .deb use /opt/tapeback/venv/bin/pip
-sudo /opt/tapeback/bin/pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
+# AUR/.deb done manually (bundled venv): for Arch use /opt/simic/bin/pip,
+# for .deb use /opt/simic/venv/bin/pip
+sudo /opt/simic/bin/pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
 ```
 
 They install alongside the CUDA 13 libraries without conflict. No `LD_LIBRARY_PATH`
-needed: when `TAPEBACK_DEVICE=cuda`, tapeback finds and preloads them
+needed: when `SIMIC_DEVICE=cuda`, simic finds and preloads them
 on startup. If they're not installed, transcription falls back to CPU with the message
 above.
 
@@ -653,20 +669,20 @@ language from that silence and hallucinated.
 
 Fixes, in order of reliability:
 
-- **Pin the language** if you know it: `TAPEBACK_LANGUAGE=ru` (or `en`, …). English
+- **Pin the language** if you know it: `SIMIC_LANGUAGE=ru` (or `en`, …). English
   terms inside another language still transcribe fine.
-- **Probe more speech** before deciding: `TAPEBACK_LANGUAGE_DETECTION_SEGMENTS=4`.
-- **Mixed-language meetings** (real code-switching): `TAPEBACK_MULTILINGUAL=true`.
-- **Suppress silence hallucinations**: `TAPEBACK_HALLUCINATION_SILENCE_THRESHOLD=2.0`.
+- **Probe more speech** before deciding: `SIMIC_LANGUAGE_DETECTION_SEGMENTS=4`.
+- **Mixed-language meetings** (real code-switching): `SIMIC_MULTILINGUAL=true`.
+- **Suppress silence hallucinations**: `SIMIC_HALLUCINATION_SILENCE_THRESHOLD=2.0`.
 
 ## Uninstall
 
 ```bash
 # Arch Linux
-yay -R tapeback tapeback-tray tapeback-diarize tapeback-llm tapeback-cuda
+yay -R simic simic-tray simic-diarize simic-llm simic-cuda
 
 # pip / uv
-uv tool uninstall tapeback
+uv tool uninstall si-mic
 
 # Remove cached ML models (~2-5 GB)
 # Skip if you use HuggingFace for other projects
@@ -675,26 +691,33 @@ rm -rf ~/.cache/huggingface/
 
 ## Roadmap
 
-- **Speaker profiles**: learn and remember recurring speakers across meetings
+- **Obsidian plugin**: start and stop from a ribbon button, recording time in the status
+  bar, the note opened when it is ready
+- **Speaker names**: name the voices once, and remember recurring speakers across meetings
+- **Auto-record**: start when a call app opens the microphone, stop when it releases it
+- **Desktop integration**: a GNOME/KDE panel indicator alongside the tray icon
 - **Multi-language meetings**: detect and handle language switches mid-meeting
-- **Windows support**: WASAPI loopback capture
 
-## Support
+Ideas and bug reports are welcome in the [issues](https://github.com/JaimeAlonsoGA/simic-monorepo/issues).
 
-If you find tapeback useful, consider a small donation:
+## Origins
 
-| USDT (TRC-20) | ADA (Cardano) |
-|:-:|:-:|
-| <img src="docs/qr-usdt.png" width="180"> | <img src="docs/qr-ada.png" width="180"> |
-| `TAECw9FebnoSN2n3H2Fk9Bv5aA8fwpCuBB` | `addr1q9tqg2g8wxpxawsrvea84lms3ampuda0ygzawuxq77sxwr48mxj2vq2rzd4nsmhpdhy6lftp30tz78tetzr29mtvkqmsskrmp7` |
+simic began as a fork of [tapeback](https://github.com/yastcher/tapeback) by Yast, and
+keeps its git history. It has since been reworked into a project of its own — light
+capture, crash-safe recording and recovery, background transcription, recording health
+checks, desktop notifications and a new command line among the changes; see the
+[changelog](CHANGELOG.md). Thanks to Yast and tapeback's contributors for the foundation.
 
-## Links
+**Coming from tapeback?** Settings keep their names under a new prefix: rename
+`TAPEBACK_` to `SIMIC_` in your `.env` and move it to `~/.config/simic/`. Finish any
+pending recording with `tapeback recover` before uninstalling tapeback — simic keeps its
+recordings in its own directory and does not see tapeback's.
 
-- [Contributing](CONTRIBUTING.md)
-- [Changelog](CHANGELOG.md)
-- [Deploy](DEPLOY.md)
-- [CI/CD](.github/workflows/)
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), and [SECURITY.md](SECURITY.md) to report a
+vulnerability privately.
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

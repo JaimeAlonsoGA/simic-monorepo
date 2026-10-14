@@ -2,7 +2,7 @@
 
 import pytest
 
-from tapeback.glossary import DEFAULT_HOTWORDS
+from simic.glossary import DEFAULT_HOTWORDS
 
 
 def _terms() -> list[str]:
@@ -11,7 +11,7 @@ def _terms() -> list[str]:
 
 @pytest.mark.parametrize(
     "term",
-    ["tapeback", "Whisper", "Obsidian", "LLM", "RAG", "ONNX", "OpenVINO", "Jira", "markdown"],
+    ["simic", "Whisper", "Obsidian", "LLM", "RAG", "ONNX", "OpenVINO", "Jira", "markdown"],
 )
 def test_glossary_contains_the_terms_that_measurably_failed(term):
     """Every term here was observed mangled in a real transcript."""

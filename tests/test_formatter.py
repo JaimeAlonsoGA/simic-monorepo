@@ -1,13 +1,18 @@
 """Formatter tests — markdown generation and vault I/O pipelines."""
 
-from tapeback.formatter import (
+from simic.formatter import (
     TranscriptMeta,
     _mark_low_confidence_words,
     format_live_markdown,
     format_markdown,
 )
-from tapeback.models import Segment, Word
-from tapeback.vault import remove_live_markdown, save_live_markdown, save_to_vault
+from simic.models import Segment, Word
+from simic.vault import (
+    remove_live_markdown,
+    save_audio_to_vault,
+    save_live_markdown,
+    save_markdown_to_vault,
+)
 
 
 def test_format_markdown_pipeline():
@@ -157,8 +162,11 @@ def test_format_markdown_without_raw_segments_unchanged():
     assert "**You:** Hello." in result
 
 
-def test_save_to_vault_pipeline(settings, tmp_vault, tmp_path):
-    """save_to_vault should create directories, save .md and .wav, and avoid overwrites."""
+def test_saving_to_the_vault_creates_directories_and_never_overwrites(
+    settings, tmp_vault, tmp_path
+):
+    """The note and the kept audio create their directories; a second note with the same
+    name gets a suffix instead of replacing the first."""
     settings = settings.model_copy(update={"audio_format": "wav"})
     stereo_wav = tmp_path / "stereo.wav"
     stereo_wav.write_bytes(b"fake wav data")
@@ -169,12 +177,8 @@ def test_save_to_vault_pipeline(settings, tmp_vault, tmp_path):
     assert not attachments_dir.exists()
 
     # First save — creates directories and files
-    md_path = save_to_vault(
-        markdown="# Test",
-        stereo_wav=stereo_wav,
-        settings=settings,
-        session_name="2026-03-17_14-30-00",
-    )
+    save_audio_to_vault(stereo_wav, settings, "2026-03-17_14-30-00")
+    md_path = save_markdown_to_vault("# Test", settings, "2026-03-17_14-30-00")
 
     assert md_path.exists()
     assert md_path.read_text() == "# Test"
@@ -186,7 +190,7 @@ def test_save_to_vault_pipeline(settings, tmp_vault, tmp_path):
     assert audio_path.exists()
 
     # Second save — gets _1 suffix (no overwrite)
-    md_path_2 = save_to_vault("# Second", stereo_wav, settings, "2026-03-17_14-30-00")
+    md_path_2 = save_markdown_to_vault("# Second", settings, "2026-03-17_14-30-00")
     assert md_path_2.name == "2026-03-17_14-30-00_1.md"
     assert md_path_2.read_text() == "# Second"
 

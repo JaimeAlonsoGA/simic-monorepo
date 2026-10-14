@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from tapeback.audio import merge_channels
+from simic.audio import merge_channels
 from tests.fixtures import create_silent_wav
 
 

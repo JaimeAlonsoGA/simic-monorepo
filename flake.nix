@@ -1,5 +1,5 @@
 {
-  description = "tapeback — local meeting recorder with transcription for Obsidian";
+  description = "simic — local meeting recorder with transcription for Obsidian";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -22,21 +22,21 @@
           ];
 
           shellHook = ''
-            echo "tapeback dev shell — run 'uv sync' to install Python deps"
+            echo "simic dev shell — run 'uv sync' to install Python deps"
           '';
         };
 
         # Convenience wrappers — run via uvx, NOT reproducible Nix packages.
         # Require network access on first run to fetch from PyPI.
-        #   nix run github:yastcher/tapeback            # base
-        #   nix run github:yastcher/tapeback#tray       # + system tray icon
-        #   nix run github:yastcher/tapeback#llm        # + summaries
-        #   nix run github:yastcher/tapeback#diarize    # + speaker diarization
-        #   nix run github:yastcher/tapeback#full       # everything
+        #   nix run github:JaimeAlonsoGA/simic-monorepo            # base
+        #   nix run github:JaimeAlonsoGA/simic-monorepo#tray       # + system tray icon
+        #   nix run github:JaimeAlonsoGA/simic-monorepo#llm        # + summaries
+        #   nix run github:JaimeAlonsoGA/simic-monorepo#diarize    # + speaker diarization
+        #   nix run github:JaimeAlonsoGA/simic-monorepo#full       # everything
         packages = let
-          mkWrapper = extras: pkgs.writeShellScriptBin "tapeback" ''
+          mkWrapper = extras: pkgs.writeShellScriptBin "simic" ''
             export PATH="${pkgs.lib.makeBinPath [ pkgs.ffmpeg pkgs.pipewire.pulse ]}:$PATH"
-            exec ${pkgs.uv}/bin/uvx "tapeback${extras}" "$@"
+            exec ${pkgs.uv}/bin/uvx "simic${extras}" "$@"
           '';
         in {
           default  = mkWrapper "";

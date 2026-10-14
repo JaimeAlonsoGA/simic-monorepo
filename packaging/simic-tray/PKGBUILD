@@ -1,0 +1,19 @@
+# Maintainer: Jaime Alonso <alonsog.jaime@gmail.com>
+pkgname=simic-tray
+pkgver=0.9.10
+pkgrel=1
+pkgdesc="System tray icon for simic (start/stop recording from tray)"
+arch=('any')
+url="https://github.com/JaimeAlonsoGA/simic-monorepo"
+license=('Apache-2.0')
+depends=('simic')
+install=simic-tray.install
+
+# Meta-package: dependencies installed via .install hook into /opt/simic/ venv.
+
+package() {
+    install -Dm644 /dev/stdin "$pkgdir/usr/share/doc/$pkgname/README" <<EOF
+simic-tray: system tray icon for simic.
+Pip dependencies installed into /opt/simic/ venv by install hook.
+EOF
+}

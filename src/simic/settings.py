@@ -1,0 +1,341 @@
+from pathlib import Path
+from typing import Literal, Self
+from warnings import warn
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from simic import const
+from simic._stt_caps import openai_capabilities_for
+from simic.glossary import DEFAULT_HOTWORDS
+
+# Default models per provider — used when SIMIC_LLM_MODEL is not set.
+# Update here when providers deprecate models.
+DEFAULT_MODELS: dict[str, str] = {
+    "anthropic": "claude-sonnet-4-20250514",
+    "openai": "gpt-4o",
+    "groq": "llama-3.3-70b-versatile",
+    "gemini": "gemini-2.5-flash",
+    "openrouter": "google/gemini-2.5-flash:free",
+    "deepseek": "deepseek-chat",
+    "qwen": "qwen-turbo",
+}
+
+type LLMProvider = Literal[
+    "anthropic",
+    "openai",
+    "groq",
+    "gemini",
+    "openrouter",
+    "deepseek",
+    "qwen",
+]
+
+# "local" = faster-whisper on this machine; other values are remote STT backends.
+# Today the only remote backend is "openai" (Audio Transcriptions API).
+# Remote STT uploads meeting audio off-machine — opt-in only.
+type SttBackend = Literal["local", "openai"]
+type AudioFormat = Literal["wav", "mp3"]
+
+DEFAULT_LOCAL_STT_MODEL = "large-v3-turbo"
+# OpenAI remote default: whisper-1 keeps timestamps so local pyannote still works.
+# Switch to gpt-transcribe or gpt-4o-transcribe-diarize via SIMIC_STT_MODEL.
+DEFAULT_REMOTE_STT_MODEL = "whisper-1"
+
+# The user's own configuration: read below, written by `simic ui`.
+USER_ENV_FILE = Path.home() / ".config" / "simic" / ".env"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="SIMIC_",
+        env_file=(USER_ENV_FILE, ".env"),
+        env_file_encoding="utf-8",
+        populate_by_name=True,
+    )
+
+    # Output directory (Obsidian vault or any folder).
+    # This fork writes into the Obsidian vault on this machine.
+    vault_path: Path = Path.home() / "simic"
+
+    # Subdirectories in vault
+    meetings_dir: str = "meetings"
+    attachments_dir: str = "attachments/audio"
+
+    # STT backend. Default stays fully local (faster-whisper).
+    # Set SIMIC_STT_BACKEND=openai for the OpenAI remote backend — requires
+    # si-mic[stt] (or si-mic[llm], which also installs the openai SDK) and
+    # SIMIC_STT_API_KEY (or OPENAI_API_KEY). Meeting audio then leaves the
+    # machine; see README privacy notes.
+    stt_backend: SttBackend = "local"
+    # Model id for the active STT backend. Local default large-v3-turbo; OpenAI
+    # remote default whisper-1. Empty resolves in the validator.
+    stt_model: str = ""
+    # Deprecated: prefer SIMIC_STT_MODEL. Still read so old .env files work.
+    whisper_model: str = ""
+    # Max concurrent remote uploads when a long recording is sliced into chunks.
+    stt_concurrency: int = Field(default=4, ge=1)
+    # API key for remote STT (SIMIC_STT_API_KEY). Falls back to OPENAI_API_KEY
+    # then SIMIC_LLM_API_KEY when llm_provider=openai.
+    stt_api_key: SecretStr = SecretStr("")
+    # Per-request read/write timeout for remote STT (connect stays short separately).
+    # Diarize slices (~10 min audio) often need several minutes of server time; 120s
+    # was killing healthy uploads and forcing retry loops.
+    stt_timeout: float = Field(default=900.0, gt=0.0)
+    # App-level retries per chunk after a retryable failure (timeouts, 5xx, …).
+    stt_max_retries: int = Field(default=5, ge=0)
+    # Exponential backoff base between remote STT retries (capped in const).
+    stt_retry_base_delay: float = Field(default=5.0, gt=0.0)
+    # Status heartbeat while a remote upload is in flight.
+    stt_heartbeat_seconds: float = Field(default=15.0, gt=0.0)
+    # Wall clock for ffmpeg encode/slice used by remote STT uploads.
+    stt_ffmpeg_timeout: float = Field(default=120.0, gt=0.0)
+
+    # Decoding / device (local backend; remote ignores most of these)
+    language: str = "auto"
+    # This machine has no NVIDIA GPU. Upstream defaults to cuda.
+    device: str = "cpu"
+    compute_type: str = "auto"  # "int8"/"float16"
+    beam_size: int = 4
+    # Threads ctranslate2 decodes with on the CPU. 0 is faster-whisper's default of 4,
+    # whatever the machine has.
+    cpu_threads: int = Field(default=0, ge=0)
+    # Temperature fallback ladder. Decoding starts at 0.0 (deterministic, best
+    # quality) and steps up only when a segment decodes poorly. The HIGH steps are
+    # what break Whisper out of hallucination loops on noisy/quiet input — keep the
+    # full ladder. Shortening it makes the model get STUCK in repeat loops, which is
+    # both slower (it generates tokens up to the limit) and worse (repeats in text).
+    temperature: tuple[float, ...] = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
+    # Batched inference (faster-whisper BatchedInferencePipeline): processes VAD
+    # segments in parallel batches — several times faster on GPU. Off by default
+    # (0) since it can OOM small GPUs; set e.g. SIMIC_BATCH_SIZE=8 to enable.
+    batch_size: int = Field(default=0, ge=0)
+    # Comma-separated terms to bias decoding towards (faster-whisper `hotwords`).
+    # Default glossary and the reasoning behind it live in glossary.py.
+    # Empty disables the bias entirely.
+    hotwords: str = DEFAULT_HOTWORDS
+    vad_filter: bool = True
+    # Seconds of audio consumed per decode window. Whisper's encoder is FIXED at 30 s:
+    # faster-whisper zero-pads every window back to 3000 mel frames before encoding
+    # (transcribe.py `pad_or_trim`), so a smaller value does not make the encoder pass
+    # cheaper — it only makes the run need more of them. At 2 the encoder does 15x the
+    # necessary work; measured on a 145 s file, 2 -> 390.6 s and 30 -> 41.4 s.
+    # Do not lower this to fight hallucinations on long pauses; that is what
+    # vad_filter, no_speech_threshold and gate_mic_silence are for.
+    chunk_length: int = 30
+    condition_on_previous_text: bool = False
+    # Lower = more aggressive silence rejection (helps suppress Whisper training-data
+    # hallucinations like "Субтитры DimaTorzok" on long pauses). Default in Whisper is 0.6.
+    no_speech_threshold: float = Field(default=0.4, ge=0.0, le=1.0)
+    # Number of segments probed before deciding the language. faster-whisper's default
+    # of 1 picks the language from the first segment, which misfires when a channel
+    # starts with silence (e.g. mic while the user only listens — it can guess Japanese
+    # and hallucinate). Raise it to probe more speech before committing.
+    language_detection_segments: int = Field(default=1, ge=1)
+    # Per-segment language detection — allows mixed languages in one recording
+    # (code-switching, e.g. Russian speech with English terms). Less stable than a
+    # fixed language; opt-in.
+    multilingual: bool = False
+    # Skip silent gaps longer than this many seconds when a hallucination is detected
+    # (uses word timestamps, which are always on). None disables it.
+    hallucination_silence_threshold: float | None = Field(default=None, ge=0.0)
+
+    # Announce on the desktop (notify-send) when a note is ready or could not be made.
+    notify: bool = True
+    # Once a recording stops, transcribe it in a detached process and give the terminal
+    # back; 'simic status' shows its progress. `--wait` on start/stop overrides it.
+    background: bool = True
+
+    # Write one JSON record per processing run (config + status lines + outcome), so a
+    # run that failed or was interrupted can be diagnosed afterwards. Never contains
+    # credentials — the recorded fields are an explicit allow-list in _runlog.py.
+    run_log: bool = True
+    # None → XDG data dir (~/.local/share/simic/runs).
+    run_log_dir: Path | None = None
+
+    # Sample GPU clocks/temperature during transcription and report a one-line summary
+    # per stage. Observation only — simic never changes clock or power caps (that
+    # needs root). No-op when nvidia-smi is unavailable.
+    gpu_telemetry: bool = True
+
+    # Reuse a channel that was already transcribed with the same audio and the same
+    # output-affecting settings, so an interrupted run does not redo finished work.
+    # Granularity is a whole channel — see _resume.py for why not finer.
+    resume_cache: bool = True
+    # None → XDG data dir (~/.local/share/simic/resume).
+    resume_cache_dir: Path | None = None
+
+    # Run transcription in a child process. A CUDA out-of-memory leaks its allocation
+    # for the life of the process it happened in, and nothing reachable from Python
+    # releases it — but a process that exits gives the memory back. Costs one process
+    # start and the model load per run; set false to transcribe in-process.
+    isolate_transcription: bool = True
+
+    # Refuse to load a model on CUDA below this much free VRAM, and use the CPU instead.
+    # A CUDA out-of-memory during load leaks the allocation on ctranslate2's C++ side
+    # for the life of the process (see _device._enough_vram), so the only reliable
+    # cure is not to trigger it. The smallest configuration measured needs ~1115 MiB.
+    min_free_vram_mib: int = Field(default=1200, ge=0)
+
+    # Look for a GPU thermal clamp before each transcription stage. On laptops that
+    # share one heatsink between CPU and GPU, the controller can cut the GPU's power
+    # budget (measured: 50 W -> 5 W, clocks pinned to 300 MHz) and hold it there while
+    # the CPU stays hot. The check is one nvidia-smi query and is retaken per stage, so
+    # a clamp that clears between channels returns the run to the GPU by itself.
+    thermal_clamp_check: bool = True
+    # Seconds to wait for the clamp to release before giving up on the GPU for this
+    # stage. Default 0 — do not wait. The clamp clears on system idle, and the shortest
+    # release measured was 451 s, so any wait short enough to be tolerable essentially
+    # never succeeds while meanwhile the CPU would already be transcribing at ~2.39x
+    # real time against a clamped GPU's ~0.31x. Raise it only if the machine will
+    # genuinely be idle.
+    thermal_clamp_wait: float = Field(default=0.0, ge=0.0)
+    # When the clamp has not released by then, transcribe on CPU instead of on a card
+    # limited to a tenth of its power. Measured on the same clip: CPU 2.39x real time,
+    # clamped GPU 0.31x — the CPU is ~8x faster, so waiting it out is the worse option.
+    thermal_clamp_cpu_fallback: bool = True
+    # Idle gap after each transcription stage, to shed heat instead of driving the
+    # chassis into the clamp in the first place. Off by default: it costs wall-clock on
+    # a machine that cools adequately.
+    stage_pause_seconds: float = Field(default=0.0, ge=0.0)
+
+    # Audio
+    monitor_source: str = "auto"
+    mic_source: str = "auto"
+    # 16 kHz is Whisper's native rate. Capturing higher only inflates the file.
+    sample_rate: int = 16000
+    # mp3 while the meeting is in progress. The pipeline still builds a temporary
+    # WAV to split channels; that file is removed with the session directory.
+    # wav keeps the upstream capture path, including live transcription.
+    audio_format: AudioFormat = "mp3"
+    # Mono speech. 64 kbps is about 0.5 MB per minute per channel. 160 is the ceiling
+    # of MP3 at 16-24 kHz (MPEG-2 Layer III); above it ffmpeg refuses to start.
+    mp3_bitrate_k: int = Field(default=64, ge=16, le=160)
+    # Archive the recording in the vault and link it from the note. Off: the audio is
+    # only a step towards the transcript, and goes once the note is written. A meeting
+    # whose processing fails keeps its recording either way, for `simic recover`.
+    keep_audio: bool = False
+    # Where recordings in progress live. None → XDG state dir
+    # (~/.local/state/simic/sessions). Must be private to this user — see
+    # recorder.session_root().
+    sessions_dir: Path | None = None
+    # Time zone for naming a recording, and so for the note's file name, date and time.
+    # None → the machine's own zone. An IANA name: Europe/Madrid, UTC, ...
+    timezone: str | None = None
+
+    # HuggingFace (for pyannote). SecretStr prevents leakage in repr/str/model_dump.
+    hf_token: SecretStr = SecretStr("")
+
+    # Diarization
+    diarize: bool = True
+    max_speakers: int | None = None
+    clustering_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    # merge only near-identical spectral profiles
+    spectral_merge_threshold: float = Field(default=0.96, ge=0.0, le=1.0)
+
+    # Post-processing
+    pause_threshold: float = Field(default=1.0, ge=0.0)  # split on word gaps >= this
+    # Silence the mic channel where the user is listening (mic quiet or monitor
+    # dominant) before transcription, so Whisper doesn't hallucinate loops on the
+    # pauses (slow + garbage). Dual-channel (stereo) pipeline only.
+    gate_mic_silence: bool = True
+
+    # Live transcription — opt-in. Off by default because mid-recording GPU
+    # contention with the post-recording pipeline causes long stalls on small
+    # cards (4 GiB).  Enable with SIMIC_LIVE=true when VRAM is plentiful.
+    live: bool = False
+    live_interval: int = Field(default=60, gt=0)  # seconds between transcription cycles
+    live_overlap: float = Field(default=2.0, ge=0.0)  # seconds of overlap between chunks
+    live_min_chunk: float = Field(default=5.0, gt=0.0)  # min new audio to trigger transcription
+
+    # Summarization
+    summarize: bool = True
+    # Replace emails and phone numbers with placeholders in the transcript before it is
+    # sent to an LLM provider, and restore the real values in the summary written to the
+    # vault. Off by default. Only has any effect while summarization runs — masking does
+    # not apply to remote STT (audio leaves the machine as-is when a remote backend is on).
+    # See _mask.py.
+    mask_pii: bool = False
+    # Comma-separated literal terms to mask alongside emails and phone numbers — names,
+    # company and project names, which is the PII people actually speak aloud. Matching
+    # is case-insensitive and word-bounded, and LITERAL: a term is masked only in the
+    # exact forms listed, so an inflected language needs each form spelled out. Ignored
+    # unless mask_pii is on.
+    mask_terms: str = ""
+    llm_provider: LLMProvider = "anthropic"
+    llm_api_key: SecretStr = SecretStr("")
+    llm_model: str = ""
+
+    @model_validator(mode="after")
+    def _resolve_stt_settings(self) -> Self:
+        """Resolve stt_model defaults; accept deprecated SIMIC_WHISPER_MODEL."""
+        model = self.stt_model.strip() if self.stt_model else ""
+        if not model and self.whisper_model:
+            warn(
+                "SIMIC_WHISPER_MODEL is deprecated; use SIMIC_STT_MODEL instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            # Legacy alias is local-only; remote backends ignore it and use their default.
+            if self.stt_backend == "local":
+                model = self.whisper_model.strip()
+        if not model:
+            model = (
+                DEFAULT_REMOTE_STT_MODEL
+                if self.stt_backend == "openai"
+                else DEFAULT_LOCAL_STT_MODEL
+            )
+
+        object.__setattr__(self, "stt_model", model)
+        object.__setattr__(self, "whisper_model", model)
+        if self.stt_backend == "openai":
+            openai_capabilities_for(model)
+        return self
+
+    @field_validator("timezone")
+    @classmethod
+    def _validate_timezone(cls, value: str | None) -> str | None:
+        """Refuse an unknown zone when settings load, not at the first recording.
+        Empty means unset, as an empty variable in a .env file usually does."""
+        if not value:
+            return None
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(
+                f"unknown time zone {value!r} in SIMIC_TIMEZONE; "
+                "use an IANA name such as Europe/Madrid or UTC"
+            ) from exc
+        return value
+
+    @field_validator("meetings_dir", "attachments_dir")
+    @classmethod
+    def _validate_vault_subfolder(cls, value: str) -> str:
+        """Refuse a folder outside the vault when settings load. vault.py refuses to
+        write there too, but only once a transcript that took an hour is ready."""
+        stripped = value.strip()
+        folder = Path(stripped)
+        if not stripped or folder.is_absolute() or ".." in folder.parts:
+            raise ValueError(f"{value!r} is not a folder inside the vault")
+        return folder.as_posix()
+
+    @model_validator(mode="after")
+    def _validate_live_chunking(self) -> Self:
+        """Live chunks must be shorter than the interval or the loop drops audio."""
+        if self.live and self.live_min_chunk > self.live_interval:
+            raise ValueError(
+                f"live_min_chunk ({self.live_min_chunk}s) must be <= "
+                f"live_interval ({self.live_interval}s); otherwise cycles starve."
+            )
+        if self.live and self.sample_rate % const.SAMPLE_RATE_16K:
+            raise ValueError(
+                f"live transcription decimates to 16 kHz, so sample_rate ({self.sample_rate}) "
+                "must be a multiple of 16000."
+            )
+        return self
+
+
+def get_settings() -> Settings:
+    """Load settings from env vars and .env files."""
+    return Settings()  # type: ignore[call-arg]

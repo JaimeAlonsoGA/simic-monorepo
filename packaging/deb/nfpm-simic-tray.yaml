@@ -1,0 +1,26 @@
+name: simic-tray
+arch: all
+platform: linux
+version: ${VERSION}
+section: sound
+priority: optional
+maintainer: "Jaime Alonso <alonsog.jaime@gmail.com>"
+description: |
+  System tray icon for simic — start/stop recording from the tray.
+  Meta-package: dbus-next is installed into /opt/simic/'s virtualenv
+  by the post-install hook. The tray uses StatusNotifierItem directly
+  over D-Bus (no PyGObject / pystray needed). On GNOME, also install
+  gnome-shell-extension-appindicator (recommended below) — GNOME Shell
+  does not display SNI items without it.
+homepage: https://github.com/JaimeAlonsoGA/simic-monorepo
+license: Apache-2.0
+
+depends:
+  - simic (= ${VERSION})
+
+recommends:
+  - gnome-shell-extension-appindicator
+
+scripts:
+  postinstall: ./packaging/deb/postinst/simic-tray.sh
+  preremove: ./packaging/deb/prerm/simic-tray.sh

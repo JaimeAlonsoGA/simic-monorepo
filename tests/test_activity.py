@@ -1,5 +1,5 @@
 """What the window shows of a meeting, and what its buttons do — through the real
-Recorder, its session directory and a fake `parecord`, as `tapeback start` runs them."""
+Recorder, its session directory and a fake `parecord`, as `simic start` runs them."""
 
 import datetime
 import os
@@ -8,10 +8,10 @@ import time
 
 import pytest
 
-from tapeback import _activity
-from tapeback._activity import Activity, Job
-from tapeback.recorder import Recorder, processing, session_root
-from tapeback.settings import Settings
+from simic import _activity
+from simic._activity import Activity, Job
+from simic.recorder import Recorder, processing, session_root
+from simic.settings import Settings
 from tests.fixtures import _RECORDERS_START_SECONDS, create_session_file, process_state
 
 SESSION = "2026-10-13_10-00-00"
@@ -19,11 +19,11 @@ SESSION = "2026-10-13_10-00-00"
 
 @pytest.fixture
 def spawned(monkeypatch):
-    """The detached `tapeback recover NAME`, recorded rather than run: tests/
+    """The detached `simic recover NAME`, recorded rather than run: tests/
     test_background.py runs a real one."""
     calls: list[tuple[str, dict[str, bool]]] = []
     monkeypatch.setattr(
-        "tapeback._activity.process_in_background",
+        "simic._activity.process_in_background",
         lambda session, **flags: calls.append((session.name, flags)),
     )
     return calls

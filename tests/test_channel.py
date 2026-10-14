@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from tapeback.channel import (
+from simic.channel import (
     classify_segment_by_channel,
     filter_silent_segments,
     gate_inactive_regions,
@@ -11,7 +11,7 @@ from tapeback.channel import (
     load_stereo_channels,
     split_on_silence,
 )
-from tapeback.models import DiarizationSegment, Segment, Word
+from simic.models import DiarizationSegment, Segment, Word
 from tests.fixtures import create_mono_wav, create_stereo_wav
 
 

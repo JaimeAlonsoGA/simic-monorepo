@@ -5,7 +5,7 @@ Word error rate needs a transcript known to be right, and no one has one for the
 meetings. FLEURS (Google, CC-BY-4.0) has read sentences with their text in 102
 languages. This script strings them into a two-sided conversation — turns that
 alternate between "you" (the mic, left) and "the others" (the monitor, right), with
-the pauses of a conversation between them — and then runs it through tapeback's own
+the pauses of a conversation between them — and then runs it through simic's own
 channel split and mic gate, so the benchmark is handed exactly what Whisper gets in
 production.
 
@@ -42,9 +42,9 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from tapeback import const
-from tapeback.audio import gate_wav_inactive, split_channels_16k
-from tapeback.channel import load_stereo_channels
+from simic import const
+from simic.audio import gate_wav_inactive, split_channels_16k
+from simic.channel import load_stereo_channels
 
 # FLEURS test.tsv columns: id, file name, raw transcription, normalised transcription,
 # characters, sample count, speaker gender. One sentence is read by several speakers.

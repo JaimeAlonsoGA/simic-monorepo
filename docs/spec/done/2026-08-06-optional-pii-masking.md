@@ -4,7 +4,7 @@ Status: all stages landed (1, 2, 3).
 
 ## Context
 
-Everything tapeback does is local — recording, Whisper, pyannote — with exactly one
+Everything simic does is local — recording, Whisper, pyannote — with exactly one
 exception: `summarizer.summarize()` sends the whole transcript to an external provider
 (Anthropic, or one of six OpenAI-compatible ones, plus a fallback chain that can hand the
 same text to a *second* provider when the first fails). A meeting transcript is about the
@@ -40,7 +40,7 @@ default**, and it only has any meaning when a summarization request is actually 
 - Rules are deliberately conservative: email and phone only, with `_RULES` as the
   documented seam for more detectors. Names are an acknowledged gap needing NER.
 
-All five properties carry over. The decorator shape does not — tapeback has one call
+All five properties carry over. The decorator shape does not — simic has one call
 path, not a provider abstraction.
 
 ## Measurement: what PII is actually in the transcripts
@@ -94,19 +94,19 @@ chain is precisely the path that hands the same transcript to a *second* company
 
 ### Module
 
-`src/tapeback/_mask.py` — private helper, matching `_gpu.py` / `_quality.py` / `_resume.py`.
+`src/simic/_mask.py` — private helper, matching `_gpu.py` / `_quality.py` / `_resume.py`.
 Public surface: `Masker`, and nothing else. No domain types belong here.
 
 ### Settings
 
 | setting | default | meaning |
 |---|---|---|
-| `TAPEBACK_MASK_PII` | `false` | Master switch. Off means not a single byte changes. |
-| `TAPEBACK_MASK_TERMS` | `""` | Comma-separated literal terms to redact — names, company and project names. Same comma-separated-string shape as `TAPEBACK_HOTWORDS`. |
+| `SIMIC_MASK_PII` | `false` | Master switch. Off means not a single byte changes. |
+| `SIMIC_MASK_TERMS` | `""` | Comma-separated literal terms to redact — names, company and project names. Same comma-separated-string shape as `SIMIC_HOTWORDS`. |
 
 No interaction validator with `summarize`. `mask_pii=true` with summarization off is a
 silent no-op, which is correct: nothing is sent, so nothing needs masking. Documented,
-not enforced — a user setting it once in `~/.config/tapeback/.env` should not get an
+not enforced — a user setting it once in `~/.config/simic/.env` should not get an
 error every time they pass `--no-summarize`.
 
 ### Rules
@@ -117,7 +117,7 @@ Ported from the profiler, in order:
 2. `PHONE` — same regex (Russian `+7`/`8` and generic international, tolerant of spaces,
    dashes, parentheses; look-around prevents it grabbing bare digit runs). Verified
    against this corpus: no false positives on the 163 occurrences of `2026`.
-3. `TERM` — user list from `TAPEBACK_MASK_TERMS`. Case-insensitive, word-bounded,
+3. `TERM` — user list from `SIMIC_MASK_TERMS`. Case-insensitive, word-bounded,
    longest-first so a two-word term wins over its first word alone.
 
 Stopping there. Card numbers, ИНН and passport numbers were considered and rejected for
@@ -171,7 +171,7 @@ reliable capitalization. That is a backlog item, not this spec.
 ### Verifiability
 
 Given that the structured rules fire on nothing in the measured corpus, a user has no way
-to tell whether the feature works. Add `tapeback summarize --show-masked`: print exactly
+to tell whether the feature works. Add `simic summarize --show-masked`: print exactly
 what would be sent and exit without calling any provider. Small, and it is the difference
 between a privacy claim and a checkable one.
 
@@ -224,5 +224,5 @@ Mirrors `backend/tests/test_llm_mask.py`, plus what this project's rules demand:
 - NER for unlisted names, and its accuracy on uncased ASR output.
 - Morphological expansion of listed terms (`pymorphy3`), fail-closed when absent.
 - Harvesting name candidates from accumulated transcripts and proposing them for
-  `TAPEBACK_MASK_TERMS` — the same shape as the glossary harvesting that already worked
+  `SIMIC_MASK_TERMS` — the same shape as the glossary harvesting that already worked
   in this project, and the natural answer to "the user has to know the names".

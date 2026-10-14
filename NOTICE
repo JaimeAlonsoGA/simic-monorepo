@@ -1,0 +1,11 @@
+simic — Super Intelligent Mic
+Copyright 2026 Jaime Alonso
+
+This product began as a fork of tapeback (https://github.com/yastcher/tapeback),
+Copyright 2024-2025 Yast, licensed under the Apache License, Version 2.0.
+Its git history is kept in this repository.
+
+simic has since been substantially modified: light MP3 capture, crash-safe
+recording and recovery, background transcription, recording health checks,
+desktop notifications, and a reworked command line, among other changes.
+See CHANGELOG.md.

@@ -1,0 +1,21 @@
+# Maintainer: Jaime Alonso <alonsog.jaime@gmail.com>
+pkgname=simic-diarize
+pkgver=0.9.10
+pkgrel=1
+pkgdesc="Speaker diarization support for simic (pyannote + PyTorch)"
+arch=('any')
+url="https://github.com/JaimeAlonsoGA/simic-monorepo"
+license=('Apache-2.0')
+depends=('simic')
+optdepends=('cuda: GPU-accelerated diarization')
+install=simic-diarize.install
+
+# Meta-package: dependencies installed via .install hook into /opt/simic/ venv.
+# PyTorch wheels are ~2 GB and cannot be reasonably packaged as Arch packages.
+
+package() {
+    install -Dm644 /dev/stdin "$pkgdir/usr/share/doc/$pkgname/README" <<EOF
+simic-diarize: speaker diarization support for simic.
+Pip dependencies installed into /opt/simic/ venv by install hook.
+EOF
+}

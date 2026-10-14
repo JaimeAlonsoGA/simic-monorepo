@@ -1,10 +1,10 @@
-"""A meeting recorded the way a user records one: `tapeback start`, Ctrl+C, a note.
+"""A meeting recorded the way a user records one: `simic start`, Ctrl+C, a note.
 
-Everything inside tapeback is real — the Recorder, the session directory and its
+Everything inside simic is real — the Recorder, the session directory and its
 privacy check, the stop signals, ffmpeg, the pipeline, the vault. Only what sits
 outside it is faked, at its boundary: `parecord` (a script on PATH writing real WAVs),
 the Whisper model (answering per channel), and the user's Ctrl+C. The checks this
-replaces mocked tapeback's own parts, so no test ever ran this path end to end.
+replaces mocked simic's own parts, so no test ever ran this path end to end.
 
 Writing it exposed a stop that always waited out its five-second kill timeout. A flow
 cannot see a wait — spawning ffmpeg afterwards reaps the leftover processes anyway —
@@ -17,9 +17,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tapeback._watch import CaptureWatch, SilenceWatch
-from tapeback.cli import cli
-from tapeback.recorder import processing
+from simic._watch import CaptureWatch, SilenceWatch
+from simic.cli import cli
+from simic.recorder import processing
 from tests.fixtures import mock_whisper_by_channel, process_state
 
 pytestmark = pytest.mark.usefixtures("cpu_only")
@@ -36,7 +36,7 @@ def _meeting():
 
 
 def _sessions_root() -> Path:
-    return Path(os.environ["XDG_STATE_HOME"]) / "tapeback" / "sessions"
+    return Path(os.environ["XDG_STATE_HOME"]) / "simic" / "sessions"
 
 
 @pytest.mark.usefixtures("ctrl_c_while_recording")
@@ -44,8 +44,8 @@ def _sessions_root() -> Path:
 def test_start_then_ctrl_c_records_transcribes_and_cleans_up(
     runner, vault_env, fake_parecord, fake_notify_send, monkeypatch, audio_format
 ):
-    monkeypatch.setenv("TAPEBACK_AUDIO_FORMAT", audio_format)
-    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+    monkeypatch.setenv("SIMIC_AUDIO_FORMAT", audio_format)
+    with patch("simic.transcriber.WhisperModel", return_value=_meeting()):
         result = runner.invoke(cli, START)
 
     assert result.exit_code == 0, result.output + repr(result.exception)
@@ -76,7 +76,7 @@ def test_start_then_ctrl_c_records_transcribes_and_cleans_up(
 
     # Processed, so nothing is left to recover and nothing is still recording.
     assert list(_sessions_root().iterdir()) == []
-    assert not (Path(os.environ["XDG_STATE_HOME"]) / "tapeback" / "session.json").exists()
+    assert not (Path(os.environ["XDG_STATE_HOME"]) / "simic" / "session.json").exists()
 
 
 @pytest.mark.usefixtures("ctrl_c_while_recording")
@@ -84,13 +84,13 @@ def test_start_in_the_background_gives_the_terminal_back_and_recover_makes_the_n
     runner, vault_env, fake_parecord, fake_notify_send, monkeypatch
 ):
     """Ctrl+C stops the recording and returns at once; the note is made by
-    `tapeback recover NAME` in a process of its own (tests/test_background.py spawns a
+    `simic recover NAME` in a process of its own (tests/test_background.py spawns a
     real one). Here the spawn is recorded and its command run in-process, where the
     Whisper fake reaches it."""
-    monkeypatch.setenv("TAPEBACK_BACKGROUND", "true")
+    monkeypatch.setenv("SIMIC_BACKGROUND", "true")
     spawned = []
     monkeypatch.setattr(
-        "tapeback.cli.process_in_background", lambda session, **flags: spawned.append(flags)
+        "simic.cli.process_in_background", lambda session, **flags: spawned.append(flags)
     )
 
     result = runner.invoke(cli, START)
@@ -99,7 +99,7 @@ def test_start_in_the_background_gives_the_terminal_back_and_recover_makes_the_n
     assert spawned == [{"diarize": False, "do_summarize": False}]
     assert result.stderr.endswith(
         f"Transcribing {SESSION} in the background. A notification will say when the "
-        "note is ready.\n'tapeback status' shows how far it has got.\n"
+        "note is ready.\n'simic status' shows how far it has got.\n"
     )
     assert [process_state(call.pid) for call in fake_parecord()] == [None, None]
     assert not (vault_env / "meetings").exists()
@@ -108,7 +108,7 @@ def test_start_in_the_background_gives_the_terminal_back_and_recover_makes_the_n
         "monitor.mp3",
     ]
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+    with patch("simic.transcriber.WhisperModel", return_value=_meeting()):
         recovered = runner.invoke(cli, ["recover", SESSION, "--no-diarize", "--no-summarize"])
 
     assert recovered.exit_code == 0, recovered.output + repr(recovered.exception)
@@ -126,13 +126,13 @@ def test_start_in_the_background_gives_the_terminal_back_and_recover_makes_the_n
 
 @pytest.mark.usefixtures("ctrl_c_while_recording")
 def test_start_with_wait_transcribes_in_the_foreground(runner, vault_env, monkeypatch):
-    monkeypatch.setenv("TAPEBACK_BACKGROUND", "true")
+    monkeypatch.setenv("SIMIC_BACKGROUND", "true")
     spawned = []
     monkeypatch.setattr(
-        "tapeback.cli.process_in_background", lambda session, **flags: spawned.append(flags)
+        "simic.cli.process_in_background", lambda session, **flags: spawned.append(flags)
     )
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+    with patch("simic.transcriber.WhisperModel", return_value=_meeting()):
         result = runner.invoke(cli, [*START, "--wait"])
 
     assert result.exit_code == 0, result.output + repr(result.exception)
@@ -151,7 +151,7 @@ def test_failed_processing_keeps_the_recording_and_recover_finishes_it(
     model = MagicMock()
     model.transcribe.side_effect = RuntimeError("decoder exploded")
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=model):
+    with patch("simic.transcriber.WhisperModel", return_value=model):
         result = runner.invoke(cli, START)
 
     assert result.exit_code == 1
@@ -159,7 +159,7 @@ def test_failed_processing_keeps_the_recording_and_recover_finishes_it(
     assert fake_notify_send() == [
         (
             f"{SESSION} was not transcribed",
-            f"decoder exploded\nThe recording is kept: run 'tapeback recover {SESSION}'.",
+            f"decoder exploded\nThe recording is kept: run 'simic recover {SESSION}'.",
         )
     ]
     session = _sessions_root() / SESSION
@@ -176,7 +176,7 @@ def test_failed_processing_keeps_the_recording_and_recover_finishes_it(
     assert not (vault_env / "attachments").exists()
 
     status = runner.invoke(cli, ["status"])
-    assert f"Not yet transcribed (run 'tapeback recover'):\n  {SESSION}\n" in status.output
+    assert f"Not yet transcribed (run 'simic recover'):\n  {SESSION}\n" in status.output
 
     # While another process turns it into a note, it is neither pending nor recoverable.
     with processing(session):
@@ -185,7 +185,7 @@ def test_failed_processing_keeps_the_recording_and_recover_finishes_it(
         assert "Not yet transcribed" not in busy
         assert runner.invoke(cli, ["recover"]).stderr == "Nothing to recover.\n"
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+    with patch("simic.transcriber.WhisperModel", return_value=_meeting()):
         recovered = runner.invoke(cli, ["recover", "--no-diarize", "--no-summarize"])
 
     assert recovered.exit_code == 0, recovered.output + repr(recovered.exception)
@@ -206,9 +206,9 @@ def test_failed_processing_keeps_the_recording_and_recover_finishes_it(
 def test_kept_audio_lands_in_the_vault_and_the_note_links_it(
     runner, vault_env, fake_parecord, monkeypatch
 ):
-    monkeypatch.setenv("TAPEBACK_KEEP_AUDIO", "true")
+    monkeypatch.setenv("SIMIC_KEEP_AUDIO", "true")
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+    with patch("simic.transcriber.WhisperModel", return_value=_meeting()):
         result = runner.invoke(cli, START)
 
     assert result.exit_code == 0, result.output + repr(result.exception)
@@ -228,9 +228,9 @@ def test_start_records_only_into_a_directory_no_one_else_can_reach(
     chosen = tmp_path / "sessions"
     chosen.mkdir()
     chosen.chmod(mode)
-    monkeypatch.setenv("TAPEBACK_SESSIONS_DIR", str(chosen))
+    monkeypatch.setenv("SIMIC_SESSIONS_DIR", str(chosen))
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+    with patch("simic.transcriber.WhisperModel", return_value=_meeting()):
         result = runner.invoke(cli, START)
 
     if mode == 0o700:
@@ -254,11 +254,11 @@ def test_start_warns_when_a_channel_is_not_being_written(
     """The fake recorders write their audio at once and then nothing more: with the
     threshold at zero, both channels read as stalled at the first look."""
     monkeypatch.setattr(
-        "tapeback.cli.CaptureWatch",
+        "simic.cli.CaptureWatch",
         lambda files: CaptureWatch(files, stall_seconds=0.0),
     )
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+    with patch("simic.transcriber.WhisperModel", return_value=_meeting()):
         result = runner.invoke(cli, START)
 
     assert result.exit_code == 0, result.output + repr(result.exception)
@@ -270,13 +270,13 @@ def test_start_warns_when_a_channel_is_not_being_written(
 def test_start_warns_when_the_other_side_is_silent(runner, vault_env, fake_parecord, monkeypatch):
     """Checked at every look and silent from the first: the warning comes once."""
     monkeypatch.setattr(
-        "tapeback.cli.SilenceWatch",
+        "simic.cli.SilenceWatch",
         lambda files: SilenceWatch(
             files, measure=lambda _p, _w: -91.0, check_every=0.0, silent_after=0.0
         ),
     )
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=_meeting()):
+    with patch("simic.transcriber.WhisperModel", return_value=_meeting()):
         result = runner.invoke(cli, START)
 
     assert result.exit_code == 0, result.output + repr(result.exception)

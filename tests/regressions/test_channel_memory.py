@@ -5,13 +5,13 @@ import wave
 import numpy as np
 import pytest
 
-from tapeback.channel import (
+from simic.channel import (
     _rms_for_range,
     classify_segment_by_channel,
     identify_user_speaker,
     load_stereo_channels,
 )
-from tapeback.models import DiarizationSegment
+from simic.models import DiarizationSegment
 
 
 def _write_stereo(path, left: np.ndarray, right: np.ndarray, sample_rate: int = 48000):

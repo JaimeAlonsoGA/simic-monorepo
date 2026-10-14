@@ -5,7 +5,7 @@
 #
 # Called by `.github/workflows/arch-e2e.yml` and by `scripts/gate.sh`, so the two
 # run one check, not two copies of it. Covers what the .deb smoke cannot:
-# packaging/PKGBUILD, and tapeback on Arch's system Python rather than a bundled one.
+# packaging/PKGBUILD, and simic on Arch's system Python rather than a bundled one.
 set -euo pipefail
 
 pacman -Syu --noconfirm --needed base-devel git sudo >/dev/null
@@ -28,12 +28,12 @@ pkgver=$(sed -n 's/^pkgver=//p' "$work/PKGBUILD")
 cd /src
 git -c safe.directory=/src ls-files -z --cached --others --exclude-standard \
   | while IFS= read -r -d '' file; do [ -e "$file" ] && printf '%s\0' "$file"; done \
-  | tar --null -T - -czf "$work/tapeback-$pkgver.tar.gz" --transform "s,^,tapeback-$pkgver/,"
+  | tar --null -T - -czf "$work/simic-$pkgver.tar.gz" --transform "s,^,simic-$pkgver/,"
 chown -R builder "$work"
 
 cd "$work"
 sudo -u builder makepkg -si --noconfirm
 
-tapeback --version
-tapeback status
+simic --version
+simic status
 /src/tests/smoke/transcribe.sh

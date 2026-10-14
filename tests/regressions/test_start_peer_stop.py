@@ -1,14 +1,14 @@
-"""Regression: start must not crash when peer `tapeback stop` already finished."""
+"""Regression: start must not crash when peer `simic stop` already finished."""
 
 from unittest.mock import MagicMock, patch
 
-from tapeback.cli import cli
-from tapeback.recorder import NoActiveRecording
-from tapeback.settings import Settings
+from simic.cli import cli
+from simic.recorder import NoActiveRecording
+from simic.settings import Settings
 
 
 def test_start_exits_cleanly_when_peer_stop_finished(runner, vault_env):
-    """If `tapeback stop` already cleared the session, start must not crash."""
+    """If `simic stop` already cleared the session, start must not crash."""
     recorder = MagicMock()
     recorder.start.return_value = "peer-stopped"
     # Wait loop sees active once, then peer stop claimed the session.
@@ -16,10 +16,10 @@ def test_start_exits_cleanly_when_peer_stop_finished(runner, vault_env):
     recorder.has_session.return_value = False
 
     with (
-        patch("tapeback.cli.get_settings", return_value=Settings(vault_path=vault_env)),
-        patch("tapeback.cli.Recorder", return_value=recorder),
-        patch("tapeback.cli.detect_devices", return_value=("mon", "mic")),
-        patch("tapeback.pipeline.process_session") as mock_process,
+        patch("simic.cli.get_settings", return_value=Settings(vault_path=vault_env)),
+        patch("simic.cli.Recorder", return_value=recorder),
+        patch("simic.cli.detect_devices", return_value=("mon", "mic")),
+        patch("simic.pipeline.process_session") as mock_process,
         patch("time.sleep"),
     ):
         result = runner.invoke(cli, ["start", "peer-stopped", "--no-summarize"])
@@ -41,10 +41,10 @@ def test_start_exits_cleanly_when_stop_races_after_is_recording(runner, vault_en
     recorder.stop.side_effect = NoActiveRecording("No recording in progress.")
 
     with (
-        patch("tapeback.cli.get_settings", return_value=Settings(vault_path=vault_env)),
-        patch("tapeback.cli.Recorder", return_value=recorder),
-        patch("tapeback.cli.detect_devices", return_value=("mon", "mic")),
-        patch("tapeback.pipeline.process_session") as mock_process,
+        patch("simic.cli.get_settings", return_value=Settings(vault_path=vault_env)),
+        patch("simic.cli.Recorder", return_value=recorder),
+        patch("simic.cli.detect_devices", return_value=("mon", "mic")),
+        patch("simic.pipeline.process_session") as mock_process,
         patch("time.sleep"),
     ):
         result = runner.invoke(cli, ["start", "race-window", "--no-summarize"])

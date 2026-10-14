@@ -5,7 +5,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from tapeback.audio import (
+from simic.audio import (
     convert_to_mono16k,
     gate_wav_inactive,
     merge_channels,
@@ -128,7 +128,7 @@ def test_empty_file_raises(tmp_path):
     mic.write_bytes(b"")
 
     with (
-        patch("tapeback.audio.shutil.which", return_value="/usr/bin/ffmpeg"),
+        patch("simic.audio.shutil.which", return_value="/usr/bin/ffmpeg"),
         pytest.raises(RuntimeError, match="No audio recorded"),
     ):
         merge_channels(monitor, mic, tmp_path / "output")
@@ -143,7 +143,7 @@ def test_ffmpeg_not_found(tmp_path):
     create_silent_wav(mic)
 
     with (
-        patch("tapeback.audio.shutil.which", return_value=None),
+        patch("simic.audio.shutil.which", return_value=None),
         pytest.raises(RuntimeError, match="ffmpeg not found"),
     ):
         merge_channels(monitor, mic, tmp_path / "output")

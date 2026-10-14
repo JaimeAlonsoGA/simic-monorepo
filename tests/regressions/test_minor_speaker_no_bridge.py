@@ -12,8 +12,8 @@ The minor cluster must join the one speaker it resembles most, never bridge two.
 
 import numpy as np
 
-from tapeback.models import DiarizationSegment
-from tapeback.speaker_merge import _speaker_spectral_profile, merge_similar_speakers
+from simic.models import DiarizationSegment
+from simic.speaker_merge import _speaker_spectral_profile, merge_similar_speakers
 
 SR = 16000
 

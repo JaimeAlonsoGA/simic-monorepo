@@ -1,4 +1,4 @@
-"""Regression: an interrupted first model download broke tapeback until the cache was
+"""Regression: an interrupted first model download broke simic until the cache was
 deleted by hand.
 
 Bug: the model is loaded from the local cache first, falling back to a download only on
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tapeback.transcriber import Transcriber
+from simic.transcriber import Transcriber
 
 
 def test_an_incomplete_cached_model_is_downloaded_again(settings):
@@ -20,7 +20,7 @@ def test_an_incomplete_cached_model_is_downloaded_again(settings):
     incomplete = RuntimeError(
         "Unable to open file 'model.bin' in model '/hf/snapshots/0a363e9161cbc7ed1431c9597a8ceaf0'"
     )
-    with patch("tapeback.transcriber.WhisperModel", side_effect=[incomplete, instance]) as model:
+    with patch("simic.transcriber.WhisperModel", side_effect=[incomplete, instance]) as model:
         transcriber = Transcriber(settings)
 
     assert [call.kwargs["local_files_only"] for call in model.call_args_list] == [True, False]
@@ -33,9 +33,9 @@ def test_a_cuda_failure_is_not_mistaken_for_an_incomplete_download(settings):
     instance = MagicMock()
     cuda = RuntimeError("CUDA failed with error out of memory")
     with (
-        patch("tapeback.transcriber.WhisperModel", side_effect=[cuda, instance]) as model,
-        patch("tapeback.transcriber.free_gpu_memory"),
-        patch("tapeback.transcriber.preload_cuda_libs"),
+        patch("simic.transcriber.WhisperModel", side_effect=[cuda, instance]) as model,
+        patch("simic.transcriber.free_gpu_memory"),
+        patch("simic.transcriber.preload_cuda_libs"),
     ):
         transcriber = Transcriber(settings)
 
@@ -51,7 +51,7 @@ def test_a_failed_repair_reports_both_failures(settings):
     incomplete = RuntimeError("Unable to open file 'model.bin' in model '/hf/snapshots/x'")
     offline = OSError("We couldn't connect to 'https://huggingface.co'")
     with (
-        patch("tapeback.transcriber.WhisperModel", side_effect=[incomplete, offline]),
+        patch("simic.transcriber.WhisperModel", side_effect=[incomplete, offline]),
         pytest.raises(OSError, match="couldn't connect") as raised,
     ):
         Transcriber(settings)

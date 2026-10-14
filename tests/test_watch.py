@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from tapeback._watch import CaptureStatus, CaptureWatch, SilenceWatch, format_status, peak_db
+from simic._watch import CaptureStatus, CaptureWatch, SilenceWatch, format_status, peak_db
 from tests.fixtures import create_mono_wav
 
 

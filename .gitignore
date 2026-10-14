@@ -30,8 +30,11 @@ mutants/
 __pycache__/
 packaging/src
 packaging/pkg
-packaging/tapeback-0*
+packaging/simic-0*
 # .deb build artifacts
 /build/
 /dist/
 tmp
+
+# Personal workspace config (Orca)
+orca.yaml

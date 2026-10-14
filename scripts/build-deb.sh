@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Debian/Ubuntu .deb packages for tapeback via nfpm.
+# Build Debian/Ubuntu .deb packages for simic via nfpm.
 #
 # The .deb bundles a standalone Python interpreter (from astral-sh's
 # python-build-standalone, downloaded directly by tag) so the package does
@@ -9,17 +9,17 @@
 # tagged for a specific cpython minor.
 #
 # Layout inside the .deb:
-#   /opt/tapeback/python/         standalone CPython (~75 MB, RPATH-relative)
-#   /opt/tapeback/venv/           virtualenv with tapeback + deps installed
-#   /usr/bin/tapeback             wrapper that exec's /opt/tapeback/venv/bin/tapeback
+#   /opt/simic/python/         standalone CPython (~75 MB, RPATH-relative)
+#   /opt/simic/venv/           virtualenv with simic + deps installed
+#   /usr/bin/simic             wrapper that exec's /opt/simic/venv/bin/simic
 #
 # Usage:
-#   ./scripts/build-deb.sh                 # install tapeback from PyPI
+#   ./scripts/build-deb.sh                 # install simic from PyPI
 #   ./scripts/build-deb.sh dist/*.whl      # install from a local wheel (faster, no network)
 #
 # Smoke-test the result:
 #   docker run --rm -v $PWD/dist:/dist ubuntu:26.04 bash -c \
-#     'apt-get update -qq && apt-get install -y -qq /dist/tapeback_*.deb && tapeback --version'
+#     'apt-get update -qq && apt-get install -y -qq /dist/simic_*.deb && simic --version'
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -41,7 +41,7 @@ PYBS_VERSION="${PYBS_VERSION:-3.13.13}"
 PYBS_TARBALL="cpython-${PYBS_VERSION}+${PYBS_DATE}-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
 PYBS_URL="https://github.com/astral-sh/python-build-standalone/releases/download/${PYBS_DATE}/${PYBS_TARBALL}"
 
-BUILD_ROOT="$REPO_ROOT/build/opt/tapeback"
+BUILD_ROOT="$REPO_ROOT/build/opt/simic"
 PY_DEST="$BUILD_ROOT/python"
 VENV_DEST="$BUILD_ROOT/venv"
 DIST_DIR="$REPO_ROOT/dist"
@@ -51,9 +51,9 @@ if ! command -v nfpm >/dev/null 2>&1; then
     exit 1
 fi
 
-WHEEL_SPEC="${1:-tapeback==$VERSION}"
+WHEEL_SPEC="${1:-si-mic==$VERSION}"
 
-echo "==> Building tapeback $VERSION .deb packages"
+echo "==> Building simic $VERSION .deb packages"
 echo "    Python:     cpython-${PYBS_VERSION}+${PYBS_DATE} (python-build-standalone)"
 echo "    Wheel/spec: $WHEEL_SPEC"
 
@@ -82,30 +82,30 @@ echo "==> Creating venv at $VENV_DEST"
 "$VENV_DEST/bin/pip" install --quiet --upgrade pip
 "$VENV_DEST/bin/pip" install --quiet "$WHEEL_SPEC"
 
-echo "==> Rewriting paths for /opt/tapeback install location"
+echo "==> Rewriting paths for /opt/simic install location"
 # Replace venv's python symlinks with relative ones so they resolve correctly
-# from either the build dir or /opt/tapeback after install.
+# from either the build dir or /opt/simic after install.
 ln -sf "../../python/bin/python3.13" "$VENV_DEST/bin/python"
 ln -sf "python" "$VENV_DEST/bin/python3"
 ln -sf "python" "$VENV_DEST/bin/python3.13"
 
-# Rewrite shebangs in venv/bin/* from build path to /opt/tapeback/venv/bin/python.
+# Rewrite shebangs in venv/bin/* from build path to /opt/simic/venv/bin/python.
 find "$VENV_DEST/bin" -type f -exec \
-    sed -i "1s|^#!.*/build/opt/tapeback/venv/bin/python[^ ]*|#!/opt/tapeback/venv/bin/python|" {} \;
+    sed -i "1s|^#!.*/build/opt/simic/venv/bin/python[^ ]*|#!/opt/simic/venv/bin/python|" {} \;
 
 # pyvenv.cfg points at the python that built it — rewrite to bundled path.
-sed -i "s|$PY_DEST|/opt/tapeback/python|g" "$VENV_DEST/pyvenv.cfg"
+sed -i "s|$PY_DEST|/opt/simic/python|g" "$VENV_DEST/pyvenv.cfg"
 
 echo "==> Trimming bytecode caches"
 find "$VENV_DEST" -type d -name __pycache__ -prune -exec rm -rf {} +
 
 echo "==> Running nfpm"
 for cfg in \
-    packaging/deb/nfpm-tapeback.yaml \
-    packaging/deb/nfpm-tapeback-diarize.yaml \
-    packaging/deb/nfpm-tapeback-cuda.yaml \
-    packaging/deb/nfpm-tapeback-llm.yaml \
-    packaging/deb/nfpm-tapeback-tray.yaml
+    packaging/deb/nfpm-simic.yaml \
+    packaging/deb/nfpm-simic-diarize.yaml \
+    packaging/deb/nfpm-simic-cuda.yaml \
+    packaging/deb/nfpm-simic-llm.yaml \
+    packaging/deb/nfpm-simic-tray.yaml
 do
     echo "    - $cfg"
     nfpm package -f "$cfg" -p deb -t "$DIST_DIR"
@@ -113,4 +113,4 @@ done
 
 echo ""
 echo "Done. Artifacts in $DIST_DIR:"
-ls -1 "$DIST_DIR"/tapeback*.deb 2>/dev/null || true
+ls -1 "$DIST_DIR"/simic*.deb 2>/dev/null || true

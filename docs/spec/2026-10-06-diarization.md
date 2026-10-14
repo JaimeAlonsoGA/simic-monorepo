@@ -17,13 +17,13 @@ by hand.
 
 Measured on four recordings of 49–78 s, each with two remote speakers, monitor
 channel only, on the GPU. `3:18/7/1` reads "three speakers with 18, 7 and 1 seconds
-of speech"; the arrow is tapeback's spectral merge (`TAPEBACK_SPECTRAL_MERGE_THRESHOLD`,
+of speech"; the arrow is simic's spectral merge (`SIMIC_SPECTRAL_MERGE_THRESHOLD`,
 0.96) applied after pyannote.
 
 | config | 18-41 | 23-15 | 17-31 | 22-01 |
 |---|---|---|---|---|
 | 3.1, threshold 0.705 (model default) | 3:18/7/1 → 1 | 4:9/8/8/3 → 3 | 3:16/8/3 → 3 | 3:16/6/1 → 1 |
-| 3.1, threshold 0.85 (tapeback default) | 3:18/7/1 → 1 | 3:14/9/5 → 1 | 3:16/8/3 → 3 | 3:16/6/1 → 1 |
+| 3.1, threshold 0.85 (simic default) | 3:18/7/1 → 1 | 3:14/9/5 → 1 | 3:16/8/3 → 3 | 3:16/6/1 → 1 |
 | 3.1, threshold 0.95 | 3:18/7/1 → 1 | 3:14/9/5 → 1 | 3:16/8/3 → 3 | 2:16/7 → 2 |
 | community-1, threshold 0.4–0.8 | 3:18/7/1 → 3 | 3:14/9/5 → 1 | 3:17/7/4 → 3 | 3:17/6/1 → 3 |
 
@@ -90,4 +90,4 @@ Only defects, nothing tuned:
   left for the next release.
 - The e2e test lost its recording and now uses `2026-04-02_22-01-53` (two remote
   speakers), asserting exactly two. It reads the token from `HF_TOKEN` only:
-  `TAPEBACK_HF_TOKEN` never reached it under the settings isolation.
+  `SIMIC_HF_TOKEN` never reached it under the settings isolation.

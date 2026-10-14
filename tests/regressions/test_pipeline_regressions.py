@@ -6,9 +6,9 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr
 
-from tapeback._mono import process_mono_file
-from tapeback.pipeline import process_stereo_file
-from tapeback.settings import Settings
+from simic._mono import process_mono_file
+from simic.pipeline import process_stereo_file
+from simic.settings import Settings
 from tests.fixtures import (
     create_mono_wav,
     create_stereo_wav_segments,
@@ -36,7 +36,7 @@ def test_process_stereo_no_diarize_returns_no_raw_segments(tmp_path):
 
     mock_model = mock_whisper_transcribe([(0.0, 1.0, "Speech.")])
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=mock_model):
+    with patch("simic.transcriber.WhisperModel", return_value=mock_model):
         _segments, _info, raw_segments = process_stereo_file(
             stereo, output_dir, settings, diarize=False
         )
@@ -66,7 +66,7 @@ def test_process_stereo_times_every_heavy_stage(tmp_path):
     mock_model = mock_whisper_transcribe([(0.0, 1.0, "Speech.")])
 
     messages: list[str] = []
-    with patch("tapeback.transcriber.WhisperModel", return_value=mock_model):
+    with patch("simic.transcriber.WhisperModel", return_value=mock_model):
         process_stereo_file(stereo, output_dir, settings, diarize=False, on_status=messages.append)
 
     timed = {m.split("'")[1] for m in messages if m.startswith("Stage '")}
@@ -94,7 +94,7 @@ def test_process_stereo_reports_resolved_device(tmp_path):
     mock_model = mock_whisper_transcribe([(0.0, 1.0, "Speech.")])
 
     messages: list[str] = []
-    with patch("tapeback.transcriber.WhisperModel", return_value=mock_model):
+    with patch("simic.transcriber.WhisperModel", return_value=mock_model):
         process_stereo_file(stereo, output_dir, settings, diarize=False, on_status=messages.append)
 
     assert any(m == "Whisper: large-v3-turbo on cpu/int8" for m in messages)
@@ -116,7 +116,7 @@ def test_process_stereo_diarize_without_hf_token_returns_no_raw_segments(tmp_pat
 
     mock_model = mock_whisper_transcribe([(0.0, 1.0, "Speech.")])
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=mock_model):
+    with patch("simic.transcriber.WhisperModel", return_value=mock_model):
         _segments, _info, raw_segments = process_stereo_file(
             stereo, output_dir, settings, diarize=True
         )
@@ -139,7 +139,7 @@ def test_process_mono_no_diarize_returns_no_raw_segments(tmp_path):
 
     mock_model = mock_whisper_transcribe([(0.0, 1.0, "Speech.")])
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=mock_model):
+    with patch("simic.transcriber.WhisperModel", return_value=mock_model):
         _segments, _info, raw_segments = process_mono_file(
             mono, output_dir, settings, diarize=False
         )

@@ -1,6 +1,6 @@
 """Remote STT retry / heartbeat helpers."""
 
-from tapeback._stt_retry import (
+from simic._stt_retry import (
     RetryPolicy,
     call_with_retry,
     is_retryable_stt_error,

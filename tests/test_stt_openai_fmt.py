@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from tapeback._stt_openai_fmt import (
+from simic._stt_openai_fmt import (
     _info_from_response,
     _keywords_from_hotwords,
     _segments_from_diarized,
@@ -73,7 +73,7 @@ def test_word_from_api_dict_and_missing():
 
 
 def test_keywords_from_hotwords():
-    assert _keywords_from_hotwords("tapeback, RabbitMQ") == ["tapeback", "RabbitMQ"]
+    assert _keywords_from_hotwords("simic, RabbitMQ") == ["simic", "RabbitMQ"]
     assert _keywords_from_hotwords("  ") == []
 
 

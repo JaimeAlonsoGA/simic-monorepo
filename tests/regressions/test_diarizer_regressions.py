@@ -8,19 +8,19 @@ import numpy as np
 import pytest
 from pydantic import SecretStr
 
-from tapeback.audio import split_channels_16k
-from tapeback.channel import (
+from simic.audio import split_channels_16k
+from simic.channel import (
     filter_silent_segments,
     load_stereo_channels,
     split_on_silence,
 )
-from tapeback.diarizer import (
+from simic.diarizer import (
     Diarizer,
     assign_speakers,
     merge_similar_speakers,
 )
-from tapeback.models import DiarizationSegment, Segment, Word
-from tapeback.settings import Settings
+from simic.models import DiarizationSegment, Segment, Word
+from simic.settings import Settings
 from tests.fixtures import create_stereo_wav_segments, requires_pyannote
 
 
@@ -90,7 +90,7 @@ def test_diarize_cuda_init_fallback(tmp_vault, capsys):
         # Isolation by construction: without this the test reads the machine's real
         # free VRAM, so anything else using the GPU sends Diarizer down the
         # not-enough-VRAM branch and this assertion fails for an unrelated reason.
-        patch("tapeback.diarizer.get_free_vram_mib", return_value=4096),
+        patch("simic.diarizer.get_free_vram_mib", return_value=4096),
     ):
         mock_pipeline = MagicMock()
         mock_pipeline_cls.from_pretrained.return_value = mock_pipeline
@@ -131,7 +131,7 @@ def test_diarize_cuda_oom_fallback(tmp_vault, capsys):
         patch("pyannote.audio.Pipeline") as mock_pipeline_cls,
         # The assertion below requires the CUDA branch to be taken, which depends on
         # free VRAM — do not let another process on the GPU decide this test's result.
-        patch("tapeback.diarizer.get_free_vram_mib", return_value=4096),
+        patch("simic.diarizer.get_free_vram_mib", return_value=4096),
     ):
         mock_pipeline = MagicMock()
         mock_pipeline_cls.from_pretrained.return_value = mock_pipeline

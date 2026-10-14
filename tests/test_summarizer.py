@@ -5,13 +5,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from tapeback.models import ActionItem, Summary
-from tapeback.settings import DEFAULT_MODELS, Settings
-from tapeback.summarizer import (
+from simic.models import ActionItem, Summary
+from simic.settings import DEFAULT_MODELS, Settings
+from simic.summarizer import (
     _PROVIDER_ENV_VARS,
     _build_provider_chain,
     _call_llm,
-    _get_model,
     _resolve_api_key,
     extract_transcript_from_markdown,
     format_summary_markdown,
@@ -158,17 +157,17 @@ def test_extract_transcript_no_meeting_header():
 # --- API key resolution ---
 
 
-def test_api_key_resolution_tapeback_env(tmp_vault, monkeypatch):
-    """TAPEBACK_LLM_API_KEY takes priority over provider-specific env vars."""
+def test_api_key_resolution_simic_env(tmp_vault, monkeypatch):
+    """SIMIC_LLM_API_KEY takes priority over provider-specific env vars."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "provider-key")
-    settings = Settings(vault_path=tmp_vault, llm_api_key=SecretStr("tapeback-key"))
+    settings = Settings(vault_path=tmp_vault, llm_api_key=SecretStr("simic-key"))
 
-    assert _resolve_api_key(settings) == "tapeback-key"
+    assert _resolve_api_key(settings) == "simic-key"
 
 
 @pytest.mark.parametrize("provider,env_var", list(_PROVIDER_ENV_VARS.items()))
 def test_api_key_resolution_provider_env(tmp_vault, monkeypatch, provider, env_var):
-    """Falls back to provider-specific env var when TAPEBACK_LLM_API_KEY is empty."""
+    """Falls back to provider-specific env var when SIMIC_LLM_API_KEY is empty."""
     monkeypatch.setenv(env_var, "test-key")
     settings = Settings(vault_path=tmp_vault, llm_provider=provider, llm_api_key=SecretStr(""))
 
@@ -183,24 +182,6 @@ def test_api_key_missing_raises(tmp_vault, monkeypatch):
 
     with pytest.raises(RuntimeError, match="No API key"):
         _resolve_api_key(settings)
-
-
-# --- Model defaults ---
-
-
-@pytest.mark.parametrize("provider,expected_model", list(DEFAULT_MODELS.items()))
-def test_get_model_defaults(tmp_vault, provider, expected_model):
-    """Each provider has a sensible default model."""
-    settings = Settings(vault_path=tmp_vault, llm_provider=provider, llm_model="")
-
-    assert _get_model(settings) == expected_model
-
-
-def test_get_model_explicit_override(tmp_vault):
-    """Explicit llm_model overrides provider default."""
-    settings = Settings(vault_path=tmp_vault, llm_provider="groq", llm_model="custom-model")
-
-    assert _get_model(settings) == "custom-model"
 
 
 # --- Provider chain building ---
@@ -357,7 +338,7 @@ def test_provider_retry_and_fallback_flow(tmp_vault, monkeypatch):
     # 429 on anthropic → retry with backoff → succeed on second attempt
     with (
         patch("anthropic.Anthropic") as mock_ant,
-        patch("tapeback.summarizer.time.sleep") as mock_sleep,
+        patch("simic.summarizer.time.sleep") as mock_sleep,
     ):
         mock_ant.return_value.messages.create.side_effect = [
             HttpError("rate limited", 429),

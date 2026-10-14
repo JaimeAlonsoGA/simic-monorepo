@@ -4,8 +4,8 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
-from tapeback._notify import note_ready, notify
-from tapeback.settings import Settings
+from simic._notify import note_ready, notify
+from simic.settings import Settings
 
 
 def test_a_ready_note_is_announced_by_name(tmp_vault, fake_notify_send):
@@ -22,8 +22,8 @@ def test_notifications_can_be_turned_off(tmp_vault, fake_notify_send):
 
 def test_without_notify_send_nothing_is_attempted(tmp_vault):
     with (
-        patch("tapeback._notify.shutil.which", return_value=None),
-        patch("tapeback._notify.subprocess.run") as run,
+        patch("simic._notify.shutil.which", return_value=None),
+        patch("simic._notify.subprocess.run") as run,
     ):
         notify(Settings(vault_path=tmp_vault, notify=True), "title", "body")
 
@@ -32,9 +32,9 @@ def test_without_notify_send_nothing_is_attempted(tmp_vault):
 
 def test_a_daemon_that_never_answers_does_not_hold_up_the_run(tmp_vault):
     with (
-        patch("tapeback._notify.shutil.which", return_value="/usr/bin/notify-send"),
+        patch("simic._notify.shutil.which", return_value="/usr/bin/notify-send"),
         patch(
-            "tapeback._notify.subprocess.run",
+            "simic._notify.subprocess.run",
             side_effect=subprocess.TimeoutExpired(["notify-send"], 5.0),
         ),
     ):

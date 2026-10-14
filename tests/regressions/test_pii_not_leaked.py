@@ -1,4 +1,4 @@
-"""Regression: with TAPEBACK_MASK_PII on, no raw PII reaches any provider.
+"""Regression: with SIMIC_MASK_PII on, no raw PII reaches any provider.
 
 The unit tests in test_mask.py pin the masker itself. These pin the wiring, on the three
 paths that are easy to leave unmasked: the first request, the JSON retry, and the second
@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 from pydantic import SecretStr
 
-from tapeback.settings import Settings
-from tapeback.summarizer import summarize
+from simic.settings import Settings
+from simic.summarizer import summarize
 from tests.fixtures import clear_all_provider_env_vars, mock_anthropic_response
 
 _TRANSCRIPT = "Ivan said write to ivan.petrov@example.com or call +7 900 123-45-67 today."

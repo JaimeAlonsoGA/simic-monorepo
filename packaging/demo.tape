@@ -6,15 +6,15 @@ Set Height 500
 Set Theme "Catppuccin Mocha"
 Set TypingSpeed 50ms
 
-Type "# tapeback — record and transcribe meetings locally"
+Type "# simic — record and transcribe meetings locally"
 Enter
 Sleep 1s
 
-Type "export TAPEBACK_VAULT_PATH=~/vault"
+Type "export SIMIC_VAULT_PATH=~/vault"
 Enter
 Sleep 500ms
 
-Type "tapeback start weekly-standup"
+Type "simic start weekly-standup"
 Enter
 Sleep 2s
 

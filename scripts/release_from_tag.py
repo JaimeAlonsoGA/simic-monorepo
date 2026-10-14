@@ -31,12 +31,12 @@ import sys
 import tomllib
 
 _TAG = re.compile(r"^v(\d+\.\d+\.\d+)$")
-_LOCKED = re.compile(r'^name = "tapeback"\nversion = "(?P<version>[^"]+)"', re.M)
+_LOCKED = re.compile(r'^name = "si-mic"\nversion = "(?P<version>[^"]+)"', re.M)
 _PKGVER = re.compile(r"^pkgver=(?P<version>\S+)$", re.M)
 # The version in README's install commands: the release URL and the package file names.
 # The same two patterns scripts/bump-version.sh rewrites.
 _README_VERSION = re.compile(
-    r"releases/download/v(?P<url>\d+\.\d+\.\d+)/|tapeback(?:-[a-z]+)?_(?P<file>\d+\.\d+\.\d+)_"
+    r"releases/download/v(?P<url>\d+\.\d+\.\d+)/|simic(?:-[a-z]+)?_(?P<file>\d+\.\d+\.\d+)_"
 )
 
 
@@ -54,11 +54,11 @@ def declared_version(root: pathlib.Path) -> str:
 
 
 def locked_version(root: pathlib.Path) -> str:
-    """The version `uv.lock` records for tapeback itself — anchored on the package
+    """The version `uv.lock` records for simic itself — anchored on the package
     name, so a dependency that happens to sit on the same number is never read."""
     match = _LOCKED.search((root / "uv.lock").read_text(encoding="utf-8"))
     if match is None:
-        raise SystemExit("no tapeback version in uv.lock")
+        raise SystemExit("no simic version in uv.lock")
     return match.group("version")
 
 

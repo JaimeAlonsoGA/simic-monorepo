@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from tapeback._sources import Source, list_sources, parse_sources
+from simic._sources import Source, list_sources, parse_sources
 
 # `pactl list sources` on PipeWire, cut to what is parsed and what surrounds it.
 _LISTING = """Source #58
@@ -49,9 +49,9 @@ def test_a_monitor_is_told_from_a_microphone():
 def test_list_asks_pactl_in_the_c_locale():
     """pactl translates its own labels: in Spanish `Name:` would not be found."""
     with (
-        patch("tapeback._sources.shutil.which", return_value="/usr/bin/pactl"),
+        patch("simic._sources.shutil.which", return_value="/usr/bin/pactl"),
         patch(
-            "tapeback._sources.subprocess.run",
+            "simic._sources.subprocess.run",
             return_value=SimpleNamespace(returncode=0, stdout=_LISTING),
         ) as run,
     ):
@@ -65,15 +65,15 @@ def test_list_asks_pactl_in_the_c_locale():
 
 
 def test_list_is_empty_without_pactl():
-    with patch("tapeback._sources.shutil.which", return_value=None):
+    with patch("simic._sources.shutil.which", return_value=None):
         assert list_sources() == []
 
 
 def test_list_is_empty_when_no_server_answers():
     with (
-        patch("tapeback._sources.shutil.which", return_value="/usr/bin/pactl"),
+        patch("simic._sources.shutil.which", return_value="/usr/bin/pactl"),
         patch(
-            "tapeback._sources.subprocess.run",
+            "simic._sources.subprocess.run",
             return_value=SimpleNamespace(returncode=1, stdout=""),
         ),
     ):

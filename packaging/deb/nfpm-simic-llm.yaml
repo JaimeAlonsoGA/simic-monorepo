@@ -1,0 +1,20 @@
+name: simic-llm
+arch: all
+platform: linux
+version: ${VERSION}
+section: sound
+priority: optional
+maintainer: "Jaime Alonso <alonsog.jaime@gmail.com>"
+description: |
+  LLM summarization support for simic (Anthropic, OpenAI, Gemini).
+  Meta-package: pip dependencies are installed into /opt/simic/'s
+  virtualenv by the post-install hook.
+homepage: https://github.com/JaimeAlonsoGA/simic-monorepo
+license: Apache-2.0
+
+depends:
+  - simic (= ${VERSION})
+
+scripts:
+  postinstall: ./packaging/deb/postinst/simic-llm.sh
+  preremove: ./packaging/deb/prerm/simic-llm.sh

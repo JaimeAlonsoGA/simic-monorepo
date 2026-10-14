@@ -2,9 +2,9 @@
 
 Bug: Recorder.stop() sent SIGTERM to the two parecord processes and then polled
 os.kill(pid, 0) until they were gone. A process that has exited stays a zombie until
-its parent reaps it, and kill(pid, 0) still succeeds on a zombie. `tapeback start`
+its parent reaps it, and kill(pid, 0) still succeeds on a zombie. `simic start`
 (Ctrl+C) and the tray stop processes they spawned themselves and never reap, and
-`tapeback stop` from another terminal looks at the zombies of the `start` process —
+`simic stop` from another terminal looks at the zombies of the `start` process —
 so every stop waited the full 5 s, then sent SIGKILL to processes already dead. The
 same check made is_recording() blind to a parecord that died mid-meeting.
 
@@ -18,8 +18,8 @@ import subprocess
 import time
 from pathlib import Path
 
-from tapeback import _capture
-from tapeback.recorder import Recorder
+from simic import _capture
+from simic.recorder import Recorder
 from tests.fixtures import process_state
 
 # Bounds a wait for a state the kernel reaches within milliseconds; never asserted on.
@@ -74,7 +74,7 @@ def test_stop_reaps_the_recorders_it_started(tmp_path):
 
 
 def test_a_zombie_left_for_another_process_reads_as_stopped(tmp_path):
-    """The `tapeback stop` path: the recorders belong to the `start` process, so this
+    """The `simic stop` path: the recorders belong to the `start` process, so this
     one cannot reap them — an exited one must still read as stopped."""
     parent = subprocess.Popen(
         ["bash", "-c", "sleep 100 & echo $!; exec sleep 100"],

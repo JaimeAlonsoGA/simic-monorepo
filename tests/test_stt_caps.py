@@ -2,12 +2,12 @@
 
 import pytest
 
-from tapeback._stt_caps import (
+from simic._stt_caps import (
     allows_local_diarize,
     openai_capabilities_for,
 )
-from tapeback.remote_stt import load_remote_transcriber
-from tapeback.settings import Settings
+from simic.remote_stt import load_remote_transcriber
+from simic.settings import Settings
 
 
 def test_whisper_1_allows_local_diarize():

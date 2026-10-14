@@ -38,7 +38,7 @@ step "e2e quality"
 # count, not the exit code alone.
 report=$(mktemp)
 trap 'rm -f "$report"' EXIT
-TAPEBACK_RUN_E2E=1 uv run pytest tests/test_e2e_quality.py --no-cov -rs --junitxml="$report"
+SIMIC_RUN_E2E=1 uv run pytest tests/test_e2e_quality.py --no-cov -rs --junitxml="$report"
 python3 - "$report" <<'EOF'
 import sys
 import xml.etree.ElementTree as ET

@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tapeback.transcriber import Transcriber
+from simic.transcriber import Transcriber
 
 
 def _whisper_info() -> MagicMock:
@@ -24,7 +24,7 @@ def _whisper_info() -> MagicMock:
 
 def test_non_cuda_runtime_error_propagates_without_cpu_fallback(settings):
     cuda_settings = settings.model_copy(update={"device": "cuda"})
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.side_effect = RuntimeError("corrupt audio frame")
 
@@ -45,7 +45,7 @@ def test_cuda_oom_falls_back_to_cpu_and_retries(settings):
     good_seg.text = " hi "
     good_seg.words = []
 
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.side_effect = [
             RuntimeError("CUDA failed with error out of memory"),
@@ -70,7 +70,7 @@ def test_cuda_inference_error_message_is_surfaced(settings, capsys):
     good_seg = MagicMock()
     good_seg.start, good_seg.end, good_seg.text, good_seg.words = 0.0, 1.0, "ok", []
 
-    with patch("tapeback.transcriber.WhisperModel") as mock_model_cls:
+    with patch("simic.transcriber.WhisperModel") as mock_model_cls:
         instance = mock_model_cls.return_value
         instance.transcribe.side_effect = [
             RuntimeError("CUDA failed with error out of memory"),

@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from tapeback import _gpu
-from tapeback._gpu import (
+from simic import _gpu
+from simic._gpu import (
     GpuStats,
     get_free_vram_mib,
     is_cuda_error,

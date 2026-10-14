@@ -1,17 +1,17 @@
 # Security review — full repository, 2026-08-07
 
-First full-repository security pass. Scope: all of `src/tapeback/` (30 modules),
+First full-repository security pass. Scope: all of `src/simic/` (30 modules),
 `scripts/`, `.github/workflows/`, and packaging configuration. Reviewed at v0.9.8.
 
 ## Threat model
 
-tapeback is a single-user desktop CLI. No server, no database, no network listener. The
+simic is a single-user desktop CLI. No server, no database, no network listener. The
 inputs that matter:
 
 | input | trust | where it lands |
 |---|---|---|
 | meeting audio captured from PulseAudio/PipeWire | the user's own, but the most sensitive artefact the tool holds | session directory, then the vault |
-| audio file path given to `tapeback process` | the user's own | ffmpeg argv, vault filename |
+| audio file path given to `simic process` | the user's own | ffmpeg argv, vault filename |
 | transcript text produced by Whisper | derived from audio, effectively attacker-influenced if a caller speaks | LLM request, vault markdown |
 | LLM response | **untrusted** — comes from a third party | parsed to `Summary`, written into the vault |
 | environment variables and CLI flags | trusted (the user's own shell) | settings |
@@ -22,7 +22,7 @@ pyannote — is local.
 
 ## Finding 1 (High): recordings sat in a world-writable directory — FIXED
 
-**Where:** `recorder.py` (`Recorder.start`), `const.TEMP_DIR = "/tmp/tapeback"`.
+**Where:** `recorder.py` (`Recorder.start`), `const.TEMP_DIR = "/tmp/simic"`.
 
 **What was wrong.** Sessions were written to a fixed path under `/tmp`:
 
@@ -38,11 +38,11 @@ symlink at all — and `grep` over `src/` found no `lstat`, `st_uid`, `st_mode`,
 `is_symlink` or `geteuid` anywhere in the tree.
 
 The project believed this was covered: `pyproject.toml` disabled ruff's `S108` with the
-note "/tmp/tapeback is intentional, secured with 0700 permissions". The stated mitigation
+note "/tmp/simic is intentional, secured with 0700 permissions". The stated mitigation
 did not hold for a directory somebody else created first.
 
 **Exploit.** `/tmp` is sticky (01777), so any local user can create entries in it. On a
-shared machine an attacker runs `mkdir -m 0777 /tmp/tapeback` (or points it at a
+shared machine an attacker runs `mkdir -m 0777 /tmp/simic` (or points it at a
 directory of their own with a symlink) before the victim's first recording. The victim
 records; two `parecord` processes write `monitor.wav` — every other participant's speech
 — and `mic.wav` — the victim's own microphone — straight into it. The attacker reads
@@ -53,8 +53,8 @@ The symlink variant additionally gives an attacker-chosen destination for `mkdir
 subsequent writes, as the victim's user.
 
 **Fix.** `recorder.session_root()` now resolves to `sessions/` in the XDG state
-directory (`~/.local/state/tapeback/sessions`, honouring `XDG_STATE_HOME`), or to
-`TAPEBACK_SESSIONS_DIR` when the user sets one. Under the user's home it is private by
+directory (`~/.local/state/simic/sessions`, honouring `XDG_STATE_HOME`), or to
+`SIMIC_SESSIONS_DIR` when the user sets one. Under the user's home it is private by
 construction rather than by convention.
 
 `XDG_RUNTIME_DIR` (`/run/user/$UID`) was considered first and rejected. It is private,
@@ -76,7 +76,7 @@ permission boundary (0700 accepted, one bit more in any position refused) and an
 end-to-end `start()` that asserts both channels land under the private root.
 
 Tests themselves now pin `XDG_STATE_HOME` to a temp directory in an autouse fixture —
-before this change the suite was writing real directories into `/tmp/tapeback`.
+before this change the suite was writing real directories into `/tmp/simic`.
 
 ## Reviewed and clean
 
@@ -84,7 +84,7 @@ Findings below this line were investigated and dismissed with a reason, so a lat
 does not have to re-derive them.
 
 **Command injection.** No `shell=True` anywhere. Every subprocess (`ffmpeg`, `parecord`,
-`pactl`, `nvidia-smi`, `sys.executable -m tapeback._worker`) is invoked with an argument
+`pactl`, `nvidia-smi`, `sys.executable -m simic._worker`) is invoked with an argument
 list. ffmpeg filter graphs are built from `const.py` values, never from user input.
 
 **Path traversal.** `validate_session_name` uses an anchored `^[\w-]+$`. `vault.py`

@@ -132,7 +132,7 @@ had never actually run.
 | none (resample only) | 3 s | 92 → 93 °C |
 
 So the whole cost of the `split` stage is `loudnorm`, and it is also the entirety of
-tapeback's own contribution to chassis heat — 9 °C on top of whatever the desktop is
+simic's own contribution to chassis heat — 9 °C on top of whatever the desktop is
 already doing, immediately before the GPU is asked to work.
 
 **Thread limiting was tried and does nothing.**
@@ -181,7 +181,7 @@ difference found lands on readability of the quiet channel, which this project h
 repeatedly under-valued and then regretted. Trading it for 39 seconds is the same deal
 that was reverted twice before.
 
-**Worth doing instead:** make it a setting (`TAPEBACK_NORMALISATION=loudnorm |
+**Worth doing instead:** make it a setting (`SIMIC_NORMALISATION=loudnorm |
 dynaudnorm | none`) keeping `loudnorm` as the default, so a hot or weak machine can take
 the cheap path deliberately without changing anyone else's output.
 
@@ -217,9 +217,9 @@ channel is minutes, so the payoff is smaller than it was.
 
 ## 5. Personal glossary
 
-`TAPEBACK_HOTWORDS` replaces the shipped list wholesale. Two things are missing:
+`SIMIC_HOTWORDS` replaces the shipped list wholesale. Two things are missing:
 
-- **Adding** to the default rather than replacing it (`TAPEBACK_HOTWORDS_EXTRA`), so a
+- **Adding** to the default rather than replacing it (`SIMIC_HOTWORDS_EXTRA`), so a
   user keeps upstream improvements while adding their own vocabulary.
 - **Harvesting candidates** from accumulated transcripts — proper nouns and acronyms by
   frequency, terms appearing in several spellings. Done by hand once; the method worked
@@ -273,7 +273,7 @@ What it says, on this machine:
   "The batching trap" in `done/2026-08-05-transcription-speed-and-quality.md`), which
   read speech with clean gaps cannot show the price of.
 
-Nothing changed as a result: `TAPEBACK_CPU_THREADS` is exposed, the defaults stay.
+Nothing changed as a result: `SIMIC_CPU_THREADS` is exposed, the defaults stay.
 **What decides it is the same grid on the recording laptop**, where the cores are
 real x86 cores and both "more threads" and "both channels at once" may well pay:
 

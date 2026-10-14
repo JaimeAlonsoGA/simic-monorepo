@@ -36,8 +36,8 @@
       "Bash(uv sync*)",
       "Bash(uv venv:*)",
       "Bash(python*)",
-      "Bash(/opt/tapeback/bin/python:*)",
-      "Bash(*tapeback/.venv/bin/python*)",
+      "Bash(/opt/simic/bin/python:*)",
+      "Bash(*simic/.venv/bin/python*)",
       "Bash(nvcc *)",
       "Bash(nvidia-smi:*)",
       "Bash(pipewire *)"

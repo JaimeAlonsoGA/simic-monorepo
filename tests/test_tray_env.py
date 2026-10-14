@@ -1,6 +1,6 @@
 """Tray environment detection — picks the right cases for the AppIndicator hint."""
 
-from tapeback._tray_env import detect_tray_env
+from simic._tray_env import detect_tray_env
 
 
 def test_x11_no_hint():
@@ -36,4 +36,4 @@ def test_missing_envvars_no_hint():
 def test_hint_message_contains_install_command():
     env = detect_tray_env({"XDG_SESSION_TYPE": "wayland", "XDG_CURRENT_DESKTOP": "GNOME"})
     assert "sudo apt install gnome-shell-extension-appindicator" in env.hint_message
-    assert "tapeback start" in env.hint_message
+    assert "simic start" in env.hint_message

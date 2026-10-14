@@ -14,9 +14,9 @@ if [ $# -ne 1 ]; then
 fi
 
 VERSION="$1"
-TARBALL_URL="https://github.com/yastcher/tapeback/archive/v$VERSION.tar.gz"
+TARBALL_URL="https://github.com/JaimeAlonsoGA/simic-monorepo/archive/v$VERSION.tar.gz"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-AUR_DIR="/tmp/aur-tapeback-release"
+AUR_DIR="/tmp/aur-simic-release"
 
 # Verify tarball exists
 echo "Checking tarball at $TARBALL_URL..."
@@ -34,41 +34,41 @@ echo "  $SHA256"
 rm -rf "$AUR_DIR"
 mkdir -p "$AUR_DIR"
 
-# --- tapeback (main package) ---
+# --- simic (main package) ---
 echo ""
-echo "==> Updating tapeback..."
-git clone ssh://aur@aur.archlinux.org/tapeback.git "$AUR_DIR/tapeback"
-cp "$REPO_ROOT/packaging/PKGBUILD" "$AUR_DIR/tapeback/PKGBUILD"
-sed -i "s/sha256sums=('SKIP')/sha256sums=('$SHA256')/" "$AUR_DIR/tapeback/PKGBUILD"
-(cd "$AUR_DIR/tapeback" && makepkg --printsrcinfo > .SRCINFO)
-(cd "$AUR_DIR/tapeback" && git add PKGBUILD .SRCINFO && git commit -m "Update to $VERSION" && git push)
+echo "==> Updating simic..."
+git clone ssh://aur@aur.archlinux.org/simic.git "$AUR_DIR/simic"
+cp "$REPO_ROOT/packaging/PKGBUILD" "$AUR_DIR/simic/PKGBUILD"
+sed -i "s/sha256sums=('SKIP')/sha256sums=('$SHA256')/" "$AUR_DIR/simic/PKGBUILD"
+(cd "$AUR_DIR/simic" && makepkg --printsrcinfo > .SRCINFO)
+(cd "$AUR_DIR/simic" && git add PKGBUILD .SRCINFO && git commit -m "Update to $VERSION" && git push)
 
-# --- tapeback-llm ---
+# --- simic-llm ---
 echo ""
-echo "==> Updating tapeback-llm..."
-git clone ssh://aur@aur.archlinux.org/tapeback-llm.git "$AUR_DIR/tapeback-llm"
-cp "$REPO_ROOT/packaging/tapeback-llm/PKGBUILD" "$AUR_DIR/tapeback-llm/PKGBUILD"
-cp "$REPO_ROOT/packaging/tapeback-llm/tapeback-llm.install" "$AUR_DIR/tapeback-llm/"
-(cd "$AUR_DIR/tapeback-llm" && makepkg --printsrcinfo > .SRCINFO)
-(cd "$AUR_DIR/tapeback-llm" && git add PKGBUILD .SRCINFO tapeback-llm.install && git commit -m "Update to $VERSION" && git push)
+echo "==> Updating simic-llm..."
+git clone ssh://aur@aur.archlinux.org/simic-llm.git "$AUR_DIR/simic-llm"
+cp "$REPO_ROOT/packaging/simic-llm/PKGBUILD" "$AUR_DIR/simic-llm/PKGBUILD"
+cp "$REPO_ROOT/packaging/simic-llm/simic-llm.install" "$AUR_DIR/simic-llm/"
+(cd "$AUR_DIR/simic-llm" && makepkg --printsrcinfo > .SRCINFO)
+(cd "$AUR_DIR/simic-llm" && git add PKGBUILD .SRCINFO simic-llm.install && git commit -m "Update to $VERSION" && git push)
 
-# --- tapeback-diarize ---
+# --- simic-diarize ---
 echo ""
-echo "==> Updating tapeback-diarize..."
-git clone ssh://aur@aur.archlinux.org/tapeback-diarize.git "$AUR_DIR/tapeback-diarize"
-cp "$REPO_ROOT/packaging/tapeback-diarize/PKGBUILD" "$AUR_DIR/tapeback-diarize/PKGBUILD"
-cp "$REPO_ROOT/packaging/tapeback-diarize/tapeback-diarize.install" "$AUR_DIR/tapeback-diarize/"
-(cd "$AUR_DIR/tapeback-diarize" && makepkg --printsrcinfo > .SRCINFO)
-(cd "$AUR_DIR/tapeback-diarize" && git add PKGBUILD .SRCINFO tapeback-diarize.install && git commit -m "Update to $VERSION" && git push)
+echo "==> Updating simic-diarize..."
+git clone ssh://aur@aur.archlinux.org/simic-diarize.git "$AUR_DIR/simic-diarize"
+cp "$REPO_ROOT/packaging/simic-diarize/PKGBUILD" "$AUR_DIR/simic-diarize/PKGBUILD"
+cp "$REPO_ROOT/packaging/simic-diarize/simic-diarize.install" "$AUR_DIR/simic-diarize/"
+(cd "$AUR_DIR/simic-diarize" && makepkg --printsrcinfo > .SRCINFO)
+(cd "$AUR_DIR/simic-diarize" && git add PKGBUILD .SRCINFO simic-diarize.install && git commit -m "Update to $VERSION" && git push)
 
-# --- tapeback-tray ---
+# --- simic-tray ---
 echo ""
-echo "==> Updating tapeback-tray..."
-git clone ssh://aur@aur.archlinux.org/tapeback-tray.git "$AUR_DIR/tapeback-tray"
-cp "$REPO_ROOT/packaging/tapeback-tray/PKGBUILD" "$AUR_DIR/tapeback-tray/PKGBUILD"
-cp "$REPO_ROOT/packaging/tapeback-tray/tapeback-tray.install" "$AUR_DIR/tapeback-tray/"
-(cd "$AUR_DIR/tapeback-tray" && makepkg --printsrcinfo > .SRCINFO)
-(cd "$AUR_DIR/tapeback-tray" && git add PKGBUILD .SRCINFO tapeback-tray.install && git commit -m "Update to $VERSION" && git push)
+echo "==> Updating simic-tray..."
+git clone ssh://aur@aur.archlinux.org/simic-tray.git "$AUR_DIR/simic-tray"
+cp "$REPO_ROOT/packaging/simic-tray/PKGBUILD" "$AUR_DIR/simic-tray/PKGBUILD"
+cp "$REPO_ROOT/packaging/simic-tray/simic-tray.install" "$AUR_DIR/simic-tray/"
+(cd "$AUR_DIR/simic-tray" && makepkg --printsrcinfo > .SRCINFO)
+(cd "$AUR_DIR/simic-tray" && git add PKGBUILD .SRCINFO simic-tray.install && git commit -m "Update to $VERSION" && git push)
 
 # Cleanup
 rm -rf "$AUR_DIR"

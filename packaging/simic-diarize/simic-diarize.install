@@ -1,0 +1,18 @@
+_venv=/opt/simic
+
+post_install() {
+    echo "==> Installing diarization dependencies into simic venv..."
+    "$_venv/bin/pip" install --no-cache-dir \
+        "pyannote-audio>=3.1.0" "torch>=2.0.0" "torchaudio>=2.0.0"
+    echo "==> Done. Set SIMIC_HF_TOKEN for pyannote model access."
+    echo "    See: https://github.com/JaimeAlonsoGA/simic-monorepo#speaker-diarization"
+}
+
+post_upgrade() {
+    post_install
+}
+
+pre_remove() {
+    echo "==> Removing diarization dependencies from simic venv..."
+    "$_venv/bin/pip" uninstall -y pyannote-audio torch torchaudio 2>/dev/null || true
+}

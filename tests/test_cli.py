@@ -11,13 +11,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from tapeback._mono import _maybe_diarize_segments
-from tapeback.cli import cli
-from tapeback.models import Segment
-from tapeback.pipeline import process_stereo_file, stop_and_process
-from tapeback.recorder import session_root
-from tapeback.settings import Settings
-from tapeback.summarizer import _PROVIDER_ENV_VARS
+from simic._mono import _maybe_diarize_segments
+from simic.cli import cli
+from simic.models import Segment
+from simic.pipeline import process_stereo_file, stop_and_process
+from simic.recorder import session_root
+from simic.settings import Settings
+from simic.summarizer import _PROVIDER_ENV_VARS
 from tests.fixtures import (
     SAMPLE_TRANSCRIPT_MD,
     VALID_LLM_RESPONSE_MINIMAL,
@@ -34,7 +34,7 @@ from tests.fixtures import (
 def test_process_mono_pipeline(runner, tmp_path, monkeypatch, vault_env):
     """process command: mono WAV → transcribe → save markdown + audio to vault.
     Also tests --name for custom output filename."""
-    monkeypatch.setenv("TAPEBACK_DIARIZE", "false")
+    monkeypatch.setenv("SIMIC_DIARIZE", "false")
 
     audio = tmp_path / "2026-03-20_10-00-00.wav"
     create_silent_wav(audio, duration=2.0, sample_rate=48000)
@@ -46,7 +46,7 @@ def test_process_mono_pipeline(runner, tmp_path, monkeypatch, vault_env):
         ]
     )
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=mock_model):
+    with patch("simic.transcriber.WhisperModel", return_value=mock_model):
         result = runner.invoke(cli, ["process", str(audio), "--no-diarize"])
 
     assert result.exit_code == 0, result.output + str(result.exception or "")
@@ -67,7 +67,7 @@ def test_process_mono_pipeline(runner, tmp_path, monkeypatch, vault_env):
     create_silent_wav(audio2, duration=2.0)
     mock_model2 = mock_whisper_transcribe([(0.0, 5.0, "Speech.")])
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=mock_model2):
+    with patch("simic.transcriber.WhisperModel", return_value=mock_model2):
         result2 = runner.invoke(
             cli, ["process", str(audio2), "--name", "my-meeting", "--no-diarize"]
         )
@@ -79,7 +79,7 @@ def test_process_mono_pipeline(runner, tmp_path, monkeypatch, vault_env):
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg required")
 def test_process_with_diarization(runner, tmp_path, monkeypatch, vault_env):
     """process command with diarization: transcribe → diarize → speakers in markdown."""
-    monkeypatch.setenv("TAPEBACK_HF_TOKEN", "hf_fake")
+    monkeypatch.setenv("SIMIC_HF_TOKEN", "hf_fake")
 
     audio = tmp_path / "2026-03-20_10-00-00.wav"
     create_silent_wav(audio, duration=2.0)
@@ -98,7 +98,7 @@ def test_process_with_diarization(runner, tmp_path, monkeypatch, vault_env):
     )
 
     with (
-        patch("tapeback.transcriber.WhisperModel", return_value=mock_model),
+        patch("simic.transcriber.WhisperModel", return_value=mock_model),
         patch("pyannote.audio.Pipeline") as mock_pipeline_cls,
     ):
         mock_pipeline = MagicMock()
@@ -119,7 +119,7 @@ def test_process_stereo_dual_channel(runner, tmp_path, monkeypatch, vault_env):
 
     Dual-channel pipeline: split channels → transcribe each → mic gets "You" label.
     """
-    monkeypatch.setenv("TAPEBACK_DIARIZE", "false")
+    monkeypatch.setenv("SIMIC_DIARIZE", "false")
 
     audio = tmp_path / "2026-03-20_10-00-00.wav"
     create_stereo_wav_segments(audio, 48000, [(1.0, 0.8, 0.003), (1.0, 0.003, 0.8)])
@@ -130,7 +130,7 @@ def test_process_stereo_dual_channel(runner, tmp_path, monkeypatch, vault_env):
         ]
     )
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=mock_model):
+    with patch("simic.transcriber.WhisperModel", return_value=mock_model):
         result = runner.invoke(cli, ["process", str(audio), "--no-diarize"])
 
     assert result.exit_code == 0, result.output + str(result.exception or "")
@@ -149,11 +149,11 @@ def test_process_stereo_dual_channel(runner, tmp_path, monkeypatch, vault_env):
 
 def test_status_command(runner, vault_env):
     """status command: shows 'Not recording' or session info."""
-    with patch("tapeback.cli.get_settings") as mock_settings:
+    with patch("simic.cli.get_settings") as mock_settings:
         mock_settings.return_value = Settings(vault_path=vault_env)
 
         # Not recording
-        with patch("tapeback.recorder.Recorder.get_session_info", return_value=None):
+        with patch("simic.recorder.Recorder.get_session_info", return_value=None):
             result = runner.invoke(cli, ["status"])
         assert result.exit_code == 0
         assert "Not recording." in result.output
@@ -165,10 +165,10 @@ def test_status_command(runner, vault_env):
             "started_at": "2026-03-20T10:00:00",
             "pid_monitor": 12345,
             "pid_mic": 12346,
-            "monitor_path": "/run/user/1000/tapeback/test/monitor.wav",
-            "mic_path": "/run/user/1000/tapeback/test/mic.wav",
+            "monitor_path": "/run/user/1000/simic/test/monitor.wav",
+            "mic_path": "/run/user/1000/simic/test/mic.wav",
         }
-        with patch("tapeback.recorder.Recorder.get_session_info", return_value=session_info):
+        with patch("simic.recorder.Recorder.get_session_info", return_value=session_info):
             result = runner.invoke(cli, ["status"])
         assert "Recording in progress: 2026-03-20_10-00-00" in result.output
 
@@ -189,7 +189,7 @@ def test_stop_and_process_pipeline(tmp_vault, session_wavs):
     annotation = mock_pyannote_annotation([(0.0, 2.0, "SPEAKER_00")])
 
     with (
-        patch("tapeback.transcriber.WhisperModel", return_value=mock_model),
+        patch("simic.transcriber.WhisperModel", return_value=mock_model),
         patch("pyannote.audio.Pipeline") as mock_pipeline_cls,
     ):
         mock_pipeline = MagicMock()
@@ -217,7 +217,7 @@ def test_stop_and_process_no_diarize(tmp_vault, session_wavs):
     mock_model = mock_whisper_transcribe([(0.0, 5.0, "No diarize.")])
 
     with (
-        patch("tapeback.transcriber.WhisperModel", return_value=mock_model),
+        patch("simic.transcriber.WhisperModel", return_value=mock_model),
         patch("pyannote.audio.Pipeline") as mock_pipeline_cls,
     ):
         stop_and_process(mock_recorder, settings, diarize=False)
@@ -242,7 +242,7 @@ def test_process_stereo_file_function(tmp_path, tmp_vault):
 
     mock_model = mock_whisper_transcribe([(0.0, 1.0, "Speech.")])
 
-    with patch("tapeback.transcriber.WhisperModel", return_value=mock_model):
+    with patch("simic.transcriber.WhisperModel", return_value=mock_model):
         segments, _info, _raw = process_stereo_file(stereo, output_dir, settings, diarize=False)
 
     assert len(segments) > 0
@@ -302,12 +302,12 @@ def test_maybe_diarize_skips_for_remote_text_model(tmp_path, tmp_vault):
 
 def test_summarize_command_rewrites_file(runner, tmp_path, monkeypatch, vault_env):
     """summarize command: mock LLM → file gets summary section."""
-    monkeypatch.setenv("TAPEBACK_LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("SIMIC_LLM_API_KEY", "sk-test")
 
     md_file = tmp_path / "transcript.md"
     md_file.write_text(SAMPLE_TRANSCRIPT_MD)
 
-    with patch("tapeback.summarizer._call_llm", return_value=VALID_LLM_RESPONSE_MINIMAL):
+    with patch("simic.summarizer._call_llm", return_value=VALID_LLM_RESPONSE_MINIMAL):
         result = runner.invoke(cli, ["summarize", str(md_file)])
 
     assert result.exit_code == 0, result.output
@@ -319,14 +319,14 @@ def test_summarize_command_rewrites_file(runner, tmp_path, monkeypatch, vault_en
 
 def test_summarize_command_no_api_key(runner, tmp_path, monkeypatch, vault_env):
     """No API key → error, file unchanged."""
-    monkeypatch.delenv("TAPEBACK_LLM_API_KEY", raising=False)
+    monkeypatch.delenv("SIMIC_LLM_API_KEY", raising=False)
     for env_var in _PROVIDER_ENV_VARS.values():
         monkeypatch.delenv(env_var, raising=False)
 
     md_file = tmp_path / "transcript.md"
     md_file.write_text(SAMPLE_TRANSCRIPT_MD)
 
-    with patch("tapeback.summarizer._build_provider_chain", return_value=[]):
+    with patch("simic.summarizer._build_provider_chain", return_value=[]):
         result = runner.invoke(cli, ["summarize", str(md_file)])
 
     assert result.exit_code != 0
@@ -336,8 +336,8 @@ def test_summarize_command_no_api_key(runner, tmp_path, monkeypatch, vault_env):
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg required")
 def test_process_with_summarization(runner, tmp_path, monkeypatch, vault_env):
     """Full pipeline: process → transcribe → summarize → file has summary."""
-    monkeypatch.setenv("TAPEBACK_DIARIZE", "false")
-    monkeypatch.setenv("TAPEBACK_LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("SIMIC_DIARIZE", "false")
+    monkeypatch.setenv("SIMIC_LLM_API_KEY", "sk-test")
 
     audio = tmp_path / "2026-03-20_10-00-00.wav"
     create_silent_wav(audio, duration=2.0, sample_rate=48000)
@@ -345,8 +345,8 @@ def test_process_with_summarization(runner, tmp_path, monkeypatch, vault_env):
     mock_model = mock_whisper_transcribe([(0.0, 5.0, "Hello from the meeting.")])
 
     with (
-        patch("tapeback.transcriber.WhisperModel", return_value=mock_model),
-        patch("tapeback.summarizer._call_llm", return_value=VALID_LLM_RESPONSE_MINIMAL),
+        patch("simic.transcriber.WhisperModel", return_value=mock_model),
+        patch("simic.summarizer._call_llm", return_value=VALID_LLM_RESPONSE_MINIMAL),
     ):
         result = runner.invoke(cli, ["process", str(audio), "--no-diarize"])
 
@@ -360,15 +360,15 @@ def test_process_with_summarization(runner, tmp_path, monkeypatch, vault_env):
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg required")
 def test_process_no_summarize_flag(runner, tmp_path, monkeypatch, vault_env):
     """--no-summarize → no LLM call."""
-    monkeypatch.setenv("TAPEBACK_DIARIZE", "false")
+    monkeypatch.setenv("SIMIC_DIARIZE", "false")
 
     audio = tmp_path / "2026-03-20_10-00-00.wav"
     create_silent_wav(audio, duration=2.0, sample_rate=48000)
     mock_model = mock_whisper_transcribe([(0.0, 5.0, "Speech.")])
 
     with (
-        patch("tapeback.transcriber.WhisperModel", return_value=mock_model),
-        patch("tapeback.summarizer._call_llm") as mock_llm,
+        patch("simic.transcriber.WhisperModel", return_value=mock_model),
+        patch("simic.summarizer._call_llm") as mock_llm,
     ):
         result = runner.invoke(cli, ["process", str(audio), "--no-diarize", "--no-summarize"])
 
@@ -389,9 +389,9 @@ def test_stop_and_process_summarization_failure(tmp_vault, session_wavs):
     mock_model = mock_whisper_transcribe([(0.0, 5.0, "Important content.")])
 
     with (
-        patch("tapeback.transcriber.WhisperModel", return_value=mock_model),
+        patch("simic.transcriber.WhisperModel", return_value=mock_model),
         patch("pyannote.audio.Pipeline"),
-        patch("tapeback.summarizer._call_llm", side_effect=RuntimeError("API error")),
+        patch("simic.summarizer._call_llm", side_effect=RuntimeError("API error")),
     ):
         stop_and_process(mock_recorder, settings, diarize=False, do_summarize=True)
 
@@ -406,12 +406,12 @@ def test_summarize_command_with_provider_and_model_overrides(
     runner, tmp_path, monkeypatch, vault_env
 ):
     """--provider and --model override settings for the summarize call."""
-    monkeypatch.setenv("TAPEBACK_LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("SIMIC_LLM_API_KEY", "sk-test")
 
     md_file = tmp_path / "transcript.md"
     md_file.write_text(SAMPLE_TRANSCRIPT_MD)
 
-    with patch("tapeback.summarizer._call_llm", return_value=VALID_LLM_RESPONSE_MINIMAL):
+    with patch("simic.summarizer._call_llm", return_value=VALID_LLM_RESPONSE_MINIMAL):
         result = runner.invoke(
             cli,
             ["summarize", str(md_file), "--provider", "groq", "--model", "custom-model"],
@@ -436,12 +436,12 @@ date: 2026-03-20
 def test_show_masked_prints_the_payload_without_sending_it(
     runner, tmp_path, monkeypatch, vault_env
 ):
-    monkeypatch.setenv("TAPEBACK_MASK_PII", "true")
-    monkeypatch.setenv("TAPEBACK_MASK_TERMS", "Ivan")
+    monkeypatch.setenv("SIMIC_MASK_PII", "true")
+    monkeypatch.setenv("SIMIC_MASK_TERMS", "Ivan")
     md_file = tmp_path / "transcript.md"
     md_file.write_text(_PII_TRANSCRIPT_MD)
 
-    with patch("tapeback.summarizer.summarize") as mock_summarize:
+    with patch("simic.summarizer.summarize") as mock_summarize:
         result = runner.invoke(cli, ["summarize", str(md_file), "--show-masked"])
 
     assert result.exit_code == 0, result.output
@@ -466,7 +466,7 @@ def test_show_masked_says_so_when_masking_is_off(runner, tmp_path, monkeypatch, 
 
 
 def test_show_masked_reports_when_nothing_matched(runner, tmp_path, monkeypatch, vault_env):
-    monkeypatch.setenv("TAPEBACK_MASK_PII", "true")
+    monkeypatch.setenv("SIMIC_MASK_PII", "true")
     md_file = tmp_path / "transcript.md"
     md_file.write_text(SAMPLE_TRANSCRIPT_MD)
 
@@ -479,7 +479,7 @@ def test_show_masked_reports_when_nothing_matched(runner, tmp_path, monkeypatch,
 
 def test_summarize_command_empty_transcript(runner, tmp_path, monkeypatch, vault_env):
     """summarize with no transcript content → error exit."""
-    monkeypatch.setenv("TAPEBACK_LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("SIMIC_LLM_API_KEY", "sk-test")
 
     md_file = tmp_path / "no_transcript.md"
     md_file.write_text("---\ndate: 2026-03-20\n---\n\nJust notes, no meeting header.\n")
@@ -493,8 +493,8 @@ def test_summarize_command_empty_transcript(runner, tmp_path, monkeypatch, vault
 def test_status_command_with_pactl(runner, vault_env):
     """status command: shows audio sources when pactl is available."""
     with (
-        patch("tapeback.cli.get_settings") as mock_settings,
-        patch("tapeback.recorder.Recorder.get_session_info", return_value=None),
+        patch("simic.cli.get_settings") as mock_settings,
+        patch("simic.recorder.Recorder.get_session_info", return_value=None),
         patch("shutil.which", return_value="/usr/bin/pactl"),
         patch("subprocess.run") as mock_run,
     ):
@@ -514,8 +514,8 @@ def test_status_command_with_pactl(runner, vault_env):
 
 
 def test_tray_missing_dependency(runner):
-    """tapeback tray → helpful error when pystray not installed."""
-    with patch.dict("sys.modules", {"tapeback.tray": None}):
+    """simic tray → helpful error when pystray not installed."""
+    with patch.dict("sys.modules", {"simic.tray": None}):
         result = runner.invoke(cli, ["tray"])
 
     assert result.exit_code != 0
@@ -526,7 +526,7 @@ def test_tray_missing_dependency(runner):
 
 
 def test_ui_without_gtk_says_how_to_get_it(runner):
-    with patch.dict("sys.modules", {"tapeback.ui": None}):
+    with patch.dict("sys.modules", {"simic.ui": None}):
         result = runner.invoke(cli, ["ui"])
 
     assert result.exit_code == 1
@@ -535,22 +535,22 @@ def test_ui_without_gtk_says_how_to_get_it(runner):
 
 def test_ui_install_adds_the_launcher(runner, tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-    with patch("tapeback._cli_gui.shutil.which", return_value="/opt/bin/tapeback"):
+    with patch("simic._cli_gui.shutil.which", return_value="/opt/bin/simic"):
         result = runner.invoke(cli, ["ui", "--install"])
 
-    launcher = tmp_path / "applications" / "io.github.jaimealonsoga.tapeback.desktop"
+    launcher = tmp_path / "applications" / "io.github.jaimealonsoga.simic.desktop"
     assert result.exit_code == 0
     assert result.output == f"Added to the applications menu: {launcher}\n"
-    assert 'Exec="/opt/bin/tapeback" ui\n' in launcher.read_text()
+    assert 'Exec="/opt/bin/simic" ui\n' in launcher.read_text()
 
 
-def test_ui_install_needs_tapeback_on_path(runner, tmp_path, monkeypatch):
+def test_ui_install_needs_simic_on_path(runner, tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-    with patch("tapeback._cli_gui.shutil.which", return_value=None):
+    with patch("simic._cli_gui.shutil.which", return_value=None):
         result = runner.invoke(cli, ["ui", "--install"])
 
     assert result.exit_code == 1
-    assert "tapeback is not on PATH" in result.output
+    assert "simic is not on PATH" in result.output
     assert not (tmp_path / "applications").exists()
 
 
@@ -565,10 +565,10 @@ def test_start_prints_remote_stt_notice(runner, vault_env):
     recorder.has_session.return_value = False
 
     with (
-        patch("tapeback.cli.get_settings", return_value=settings),
-        patch("tapeback.cli.Recorder", return_value=recorder),
-        patch("tapeback.cli.detect_devices", return_value=("mon", "mic")),
-        patch("tapeback.pipeline.stop_and_process"),
+        patch("simic.cli.get_settings", return_value=settings),
+        patch("simic.cli.Recorder", return_value=recorder),
+        patch("simic.cli.detect_devices", return_value=("mon", "mic")),
+        patch("simic.pipeline.stop_and_process"),
         patch("time.sleep"),
     ):
         result = runner.invoke(cli, ["start", "remote-notice", "--no-summarize"])
@@ -588,11 +588,11 @@ def test_start_remote_stt_notice_mentions_live_upload(runner, vault_env):
     live.live_md_path = vault_env / "live.md"
 
     with (
-        patch("tapeback.cli.get_settings", return_value=settings),
-        patch("tapeback.cli.Recorder", return_value=recorder),
-        patch("tapeback.cli.detect_devices", return_value=("mon", "mic")),
-        patch("tapeback.live.LiveTranscriber", return_value=live),
-        patch("tapeback.pipeline.stop_and_process"),
+        patch("simic.cli.get_settings", return_value=settings),
+        patch("simic.cli.Recorder", return_value=recorder),
+        patch("simic.cli.detect_devices", return_value=("mon", "mic")),
+        patch("simic.live.LiveTranscriber", return_value=live),
+        patch("simic.pipeline.stop_and_process"),
         patch("time.sleep"),
     ):
         result = runner.invoke(cli, ["start", "remote-live", "--no-summarize"])
@@ -611,10 +611,10 @@ def test_start_local_backend_has_no_remote_stt_notice(runner, vault_env):
     recorder.has_session.return_value = False
 
     with (
-        patch("tapeback.cli.get_settings", return_value=settings),
-        patch("tapeback.cli.Recorder", return_value=recorder),
-        patch("tapeback.cli.detect_devices", return_value=("mon", "mic")),
-        patch("tapeback.pipeline.stop_and_process"),
+        patch("simic.cli.get_settings", return_value=settings),
+        patch("simic.cli.Recorder", return_value=recorder),
+        patch("simic.cli.detect_devices", return_value=("mon", "mic")),
+        patch("simic.pipeline.stop_and_process"),
         patch("time.sleep"),
     ):
         result = runner.invoke(cli, ["start", "local-silent", "--no-summarize"])
@@ -629,9 +629,9 @@ def test_stop_prints_remote_stt_notice(runner, vault_env, tmp_path):
     recorder.stop.return_value = (tmp_path / "monitor.mp3", tmp_path / "mic.mp3")
 
     with (
-        patch("tapeback.cli.get_settings", return_value=settings),
-        patch("tapeback.cli.Recorder", return_value=recorder),
-        patch("tapeback.pipeline.process_session"),
+        patch("simic.cli.get_settings", return_value=settings),
+        patch("simic.cli.Recorder", return_value=recorder),
+        patch("simic.pipeline.process_session"),
     ):
         result = runner.invoke(cli, ["stop"])
 
@@ -654,7 +654,7 @@ def test_stop_without_a_recording_points_at_recordings_left_to_transcribe(runner
     assert result.exit_code == 1
     assert result.stderr == (
         "Stopping recording...\nError: No recording in progress. "
-        "Recordings not yet transcribed are finished with 'tapeback recover'.\n"
+        "Recordings not yet transcribed are finished with 'simic recover'.\n"
     )
 
 
@@ -664,8 +664,8 @@ def test_process_prints_remote_stt_notice(runner, tmp_path, vault_env):
     create_silent_wav(audio)
 
     with (
-        patch("tapeback.cli.get_settings", return_value=settings),
-        patch("tapeback.pipeline.process_file") as mock_process,
+        patch("simic.cli.get_settings", return_value=settings),
+        patch("simic.pipeline.process_file") as mock_process,
     ):
         result = runner.invoke(cli, ["process", str(audio), "--no-summarize"])
 
@@ -680,8 +680,8 @@ def test_process_local_backend_has_no_remote_stt_notice(runner, tmp_path, vault_
     create_silent_wav(audio)
 
     with (
-        patch("tapeback.cli.get_settings", return_value=settings),
-        patch("tapeback.pipeline.process_file"),
+        patch("simic.cli.get_settings", return_value=settings),
+        patch("simic.pipeline.process_file"),
     ):
         result = runner.invoke(cli, ["process", str(audio), "--no-summarize"])
 
@@ -693,15 +693,15 @@ def test_process_local_backend_has_no_remote_stt_notice(runner, tmp_path, vault_
 
 
 def test_start_refuses_live_transcription_over_an_mp3_capture(runner, vault_env, monkeypatch):
-    monkeypatch.setenv("TAPEBACK_LIVE", "true")
+    monkeypatch.setenv("SIMIC_LIVE", "true")
 
-    with patch("tapeback.cli.Recorder") as recorder_cls:
+    with patch("simic.cli.Recorder") as recorder_cls:
         result = runner.invoke(cli, ["start", "live-mp3"])
 
     assert result.exit_code == 1
     assert result.stderr == (
         "Error: Live transcription reads a growing WAV. "
-        "Use --no-live, or set TAPEBACK_AUDIO_FORMAT=wav.\n"
+        "Use --no-live, or set SIMIC_AUDIO_FORMAT=wav.\n"
     )
     recorder_cls.assert_not_called()
 
@@ -720,14 +720,14 @@ def test_status_reports_an_interrupted_recording(runner, vault_env):
     recorder.leftover_sessions.return_value = []
 
     with (
-        patch("tapeback.cli.Recorder", return_value=recorder),
+        patch("simic.cli.Recorder", return_value=recorder),
         patch("shutil.which", return_value=None),
     ):
         result = runner.invoke(cli, ["status"])
 
     assert result.exit_code == 0
     assert result.output.startswith(
-        "A recording was interrupted. Run 'tapeback stop' to transcribe it.\n"
+        "A recording was interrupted. Run 'simic stop' to transcribe it.\n"
     )
 
 
@@ -737,9 +737,9 @@ def test_recover_keeps_going_past_a_recording_that_fails(runner, vault_env, tmp_
     recorder.leftover_sessions.return_value = [broken, fine]
 
     with (
-        patch("tapeback.cli.Recorder", return_value=recorder),
+        patch("simic.cli.Recorder", return_value=recorder),
         patch(
-            "tapeback.pipeline.process_session",
+            "simic.pipeline.process_session",
             side_effect=[RuntimeError("No mic recording in broken"), fine / "note.md"],
         ) as process_session,
     ):
@@ -766,9 +766,9 @@ def test_start_warns_when_two_hours_of_meeting_would_not_fit(runner, vault_env, 
     recorder.has_session.return_value = False
 
     with (
-        patch("tapeback.cli.Recorder", return_value=recorder),
-        patch("tapeback.cli.detect_devices", return_value=("mon", "mic")),
-        patch("tapeback.cli.shutil.disk_usage", return_value=SimpleNamespace(free=free)),
+        patch("simic.cli.Recorder", return_value=recorder),
+        patch("simic.cli.detect_devices", return_value=("mon", "mic")),
+        patch("simic.cli.shutil.disk_usage", return_value=SimpleNamespace(free=free)),
     ):
         result = runner.invoke(cli, ["start", "short-disk", "--no-summarize"])
 

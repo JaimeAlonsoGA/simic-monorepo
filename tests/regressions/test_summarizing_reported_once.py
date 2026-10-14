@@ -10,23 +10,23 @@ from unittest.mock import patch
 
 import pytest
 
-from tapeback.cli import cli
+from simic.cli import cli
 from tests.fixtures import VALID_LLM_RESPONSE_MINIMAL, create_silent_wav, mock_whisper_transcribe
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg required")
 def test_summarizing_is_reported_once(runner, tmp_path, monkeypatch, vault_env):
-    monkeypatch.setenv("TAPEBACK_DIARIZE", "false")
-    monkeypatch.setenv("TAPEBACK_LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("SIMIC_DIARIZE", "false")
+    monkeypatch.setenv("SIMIC_LLM_API_KEY", "sk-test")
     audio = tmp_path / "2026-03-20_10-00-00.wav"
     create_silent_wav(audio, duration=2.0, sample_rate=48000)
 
     with (
         patch(
-            "tapeback.transcriber.WhisperModel",
+            "simic.transcriber.WhisperModel",
             return_value=mock_whisper_transcribe([(0.0, 2.0, "Hello from the meeting.")]),
         ),
-        patch("tapeback.summarizer._call_llm", return_value=VALID_LLM_RESPONSE_MINIMAL),
+        patch("simic.summarizer._call_llm", return_value=VALID_LLM_RESPONSE_MINIMAL),
     ):
         result = runner.invoke(cli, ["process", str(audio), "--no-diarize"])
 

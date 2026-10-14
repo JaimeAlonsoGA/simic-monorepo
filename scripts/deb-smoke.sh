@@ -15,18 +15,18 @@ SMOKE_IMAGES=(ubuntu:26.10 ubuntu:26.04 ubuntu:24.04 ubuntu:22.04 debian:13 debi
 
 version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
 # dist/ keeps whatever earlier builds left, and the install below goes by glob.
-rm -f dist/tapeback-*.whl dist/tapeback-*.tar.gz dist/*.deb
+rm -f dist/si_mic-*.whl dist/si_mic-*.tar.gz dist/*.deb
 uv build
-scripts/build-deb.sh "dist/tapeback-$version-py3-none-any.whl"
+scripts/build-deb.sh "dist/si_mic-$version-py3-none-any.whl"
 
 for image in "${SMOKE_IMAGES[@]}"; do
   printf '── %s\n' "$image"
   docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/tests/smoke:/smoke:ro" "$image" bash -c '
     set -e
     apt-get update -qq
-    apt-get install -y -qq /dist/tapeback_*.deb >/dev/null
-    tapeback --version
-    tapeback status
+    apt-get install -y -qq /dist/simic_*.deb >/dev/null
+    simic --version
+    simic status
     /smoke/transcribe.sh
   '
 done

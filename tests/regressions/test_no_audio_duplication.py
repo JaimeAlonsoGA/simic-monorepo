@@ -1,7 +1,7 @@
 """Regression test: re-processing a file already in the vault must not copy it again."""
 
-from tapeback.settings import Settings
-from tapeback.vault import save_audio_to_vault
+from simic.settings import Settings
+from simic.vault import save_audio_to_vault
 
 
 def test_reprocessing_a_vault_file_does_not_duplicate_it(tmp_path):

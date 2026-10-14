@@ -56,8 +56,8 @@ def test_one_failed_check_fails_the_gate_without_skipping_the_rest(run_gate):
 @pytest.mark.parametrize(
     ("changed", "stands"),
     [
-        (["src/tapeback/cli.py"], [DEB_SMOKE, ARCH_SMOKE]),
-        (["packaging/tapeback-llm/PKGBUILD"], [DEB_SMOKE, ARCH_SMOKE]),
+        (["src/simic/cli.py"], [DEB_SMOKE, ARCH_SMOKE]),
+        (["packaging/simic-llm/PKGBUILD"], [DEB_SMOKE, ARCH_SMOKE]),
         (["scripts/build-deb.sh"], [DEB_SMOKE]),
         (["scripts/arch-smoke.sh"], [ARCH_SMOKE]),
         (["tests/smoke/speech.wav"], [DEB_SMOKE, ARCH_SMOKE]),
@@ -87,7 +87,7 @@ def test_without_a_merge_base_every_stand_runs(run_gate):
 
 def test_failed_stand_fails_the_gate_and_the_next_stand_still_runs(run_gate):
     # The stub matches its basename and arguments; deb-smoke.sh takes none.
-    result, commands = run_gate(changed=["src/tapeback/cli.py"], fail="deb-smoke.sh ")
+    result, commands = run_gate(changed=["src/simic/cli.py"], fail="deb-smoke.sh ")
 
     assert commands == [*CI_CHECKS, DEB_SMOKE, ARCH_SMOKE]
     assert result.returncode == 1

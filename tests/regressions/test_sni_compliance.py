@@ -21,9 +21,9 @@ from tests.fixtures import requires_dbus_next
 
 pytestmark = requires_dbus_next
 
-from tapeback._sni import StatusNotifierItem  # noqa: E402
-from tapeback._tray_env import detect_tray_env  # noqa: E402
-from tapeback.tray import _warn_if_tray_host_missing  # noqa: E402
+from simic._sni import StatusNotifierItem  # noqa: E402
+from simic._tray_env import detect_tray_env  # noqa: E402
+from simic.tray import _warn_if_tray_host_missing  # noqa: E402
 
 
 def _properties_by_name(iface: ServiceInterface) -> dict:
@@ -65,7 +65,7 @@ def test_warn_emits_single_logger_record_no_stderr_print(caplog, capsys):
     v0.9.4 did both, doubling the message in user logs.
     """
     env = detect_tray_env({"XDG_SESSION_TYPE": "wayland", "XDG_CURRENT_DESKTOP": "GNOME"})
-    with caplog.at_level(logging.WARNING, logger="tapeback.tray"):
+    with caplog.at_level(logging.WARNING, logger="simic.tray"):
         _warn_if_tray_host_missing(env)
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1
@@ -75,7 +75,7 @@ def test_warn_emits_single_logger_record_no_stderr_print(caplog, capsys):
 
 def test_warn_skipped_when_hint_not_needed(caplog):
     env = detect_tray_env({"XDG_SESSION_TYPE": "x11", "XDG_CURRENT_DESKTOP": "GNOME"})
-    with caplog.at_level(logging.WARNING, logger="tapeback.tray"):
+    with caplog.at_level(logging.WARNING, logger="simic.tray"):
         _warn_if_tray_host_missing(env)
     assert not caplog.records
 

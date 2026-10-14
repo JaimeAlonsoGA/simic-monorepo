@@ -1,0 +1,20 @@
+name: simic-diarize
+arch: all
+platform: linux
+version: ${VERSION}
+section: sound
+priority: optional
+maintainer: "Jaime Alonso <alonsog.jaime@gmail.com>"
+description: |
+  Speaker diarization support for simic (pyannote-audio + PyTorch).
+  Meta-package: PyTorch wheels are ~2 GB and pulled in by the post-install
+  hook into /opt/simic/'s virtualenv.
+homepage: https://github.com/JaimeAlonsoGA/simic-monorepo
+license: Apache-2.0
+
+depends:
+  - simic (= ${VERSION})
+
+scripts:
+  postinstall: ./packaging/deb/postinst/simic-diarize.sh
+  preremove: ./packaging/deb/prerm/simic-diarize.sh

@@ -2,7 +2,7 @@
 
 import pytest
 
-from tapeback._quality import (
+from simic._quality import (
     count_hallucination_markers,
     count_recognised_terms,
     count_repeated_phrases,

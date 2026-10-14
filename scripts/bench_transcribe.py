@@ -6,7 +6,7 @@ felt right measured badly (a shortened temperature ladder, a lowered chunk_lengt
 so configuration choices are made from a table, not an impression. This harness
 produces that table.
 
-It drives tapeback's own `Transcriber`, not a private copy of the decode call, so
+It drives simic's own `Transcriber`, not a private copy of the decode call, so
 what it measures is what the tool ships.
 
 Usage:
@@ -38,8 +38,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from tapeback._gpu import sample_gpu, wait_for_clamp_release
-from tapeback._quality import (
+from simic._gpu import sample_gpu, wait_for_clamp_release
+from simic._quality import (
     count_hallucination_markers,
     count_recognised_terms,
     count_repeated_phrases,
@@ -49,9 +49,9 @@ from tapeback._quality import (
     punctuation_per_1000_words,
     word_error_rate,
 )
-from tapeback.formatter import WORD_LOW_CONFIDENCE
-from tapeback.settings import Settings
-from tapeback.transcriber import Transcriber
+from simic.formatter import WORD_LOW_CONFIDENCE
+from simic.settings import Settings
+from simic.transcriber import Transcriber
 
 
 @dataclass

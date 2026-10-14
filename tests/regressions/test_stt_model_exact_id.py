@@ -1,14 +1,14 @@
 """Regression: OpenAI model ids were matched case-insensitively.
 
 The allowlist compared `model.strip().lower()`, but the id goes to OpenAI exactly as
-written in TAPEBACK_STT_MODEL. So `Whisper-1` passed validation at settings load and
+written in SIMIC_STT_MODEL. So `Whisper-1` passed validation at settings load and
 was sent on as `Whisper-1` — the allowlist exists to stop a mistyped id at load.
 """
 
 import pytest
 from pydantic import ValidationError
 
-from tapeback.settings import Settings
+from simic.settings import Settings
 
 
 @pytest.mark.parametrize("model", ["Whisper-1", "WHISPER-1", "Gpt-Transcribe"])

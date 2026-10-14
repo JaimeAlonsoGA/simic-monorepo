@@ -7,7 +7,7 @@ from tests.fixtures import requires_dbus_next
 
 pytestmark = requires_dbus_next
 
-from tapeback._sni import StatusNotifierItem, register_with_watcher  # noqa: E402
+from simic._sni import StatusNotifierItem, register_with_watcher  # noqa: E402
 
 # --- unit ---
 
@@ -39,7 +39,7 @@ def test_sni_full_lifecycle_flow():
     protocol contract without a live bus.
     """
     activations: list[str] = []
-    sni = StatusNotifierItem(app_id="tapeback", title="tapeback", menu_path="/MenuBar")
+    sni = StatusNotifierItem(app_id="simic", title="simic", menu_path="/MenuBar")
     sni.set_callbacks(
         on_activate=lambda: activations.append("activate"),
         on_secondary_activate=lambda: activations.append("secondary"),
@@ -47,8 +47,8 @@ def test_sni_full_lifecycle_flow():
 
     # Every property getter is read at least once.
     assert sni.Category == "ApplicationStatus"
-    assert sni.Id == "tapeback"
-    assert sni.Title == "tapeback"
+    assert sni.Id == "simic"
+    assert sni.Title == "simic"
     assert sni.WindowId == 0
     assert sni.Menu == "/MenuBar"
     assert sni.ItemIsMenu is False
@@ -71,9 +71,9 @@ def test_sni_full_lifecycle_flow():
     sni.Activate(10, 20)
     assert activations == ["activate"]
     sni.set_icon("media-record-symbolic")
-    sni.set_tooltip("tapeback", "Recording (standup)")
+    sni.set_tooltip("simic", "Recording (standup)")
     assert sni.IconName == "media-record-symbolic"
-    assert sni.ToolTip == ["", [], "tapeback", "Recording (standup)"]
+    assert sni.ToolTip == ["", [], "simic", "Recording (standup)"]
 
     # Processing -> attention; NewStatus signal carries the new value.
     sni.set_status("NeedsAttention")

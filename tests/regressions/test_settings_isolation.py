@@ -2,19 +2,19 @@
 
 import os
 
-from tapeback._resume import default_resume_dir
-from tapeback._runlog import default_run_log_dir
-from tapeback.recorder import Recorder
-from tapeback.settings import Settings, get_settings
-from tapeback.summarizer import _build_provider_chain
+from simic._resume import default_resume_dir
+from simic._runlog import default_run_log_dir
+from simic.recorder import Recorder
+from simic.settings import Settings, get_settings
+from simic.summarizer import _build_provider_chain
 
 
 def test_settings_ignore_user_env_file():
-    """Settings must not read the developer's ~/.config/tapeback/.env during tests.
+    """Settings must not read the developer's ~/.config/simic/.env during tests.
 
-    Bug: Settings declares env_file=(~/.config/tapeback/.env, .env), so every test
+    Bug: Settings declares env_file=(~/.config/simic/.env, .env), so every test
     constructing Settings() inherited the ambient machine configuration. A developer
-    with TAPEBACK_CHUNK_LENGTH=2 in their user config got 2 where CI got the default
+    with SIMIC_CHUNK_LENGTH=2 in their user config got 2 where CI got the default
     7, which silently made assertions on default values machine-dependent.
     The autouse isolate_settings_sources fixture cuts both sources off.
     """
@@ -23,8 +23,8 @@ def test_settings_ignore_user_env_file():
     assert get_settings().stt_model == "large-v3-turbo"
 
 
-def test_ambient_tapeback_env_vars_are_cleared():
-    """Ambient TAPEBACK_* variables must not leak into tests either.
+def test_ambient_simic_env_vars_are_cleared():
+    """Ambient SIMIC_* variables must not leak into tests either.
 
     Four are pinned on purpose so no test touches the real machine: the thermal clamp
     check (which would poll the GPU), process isolation (which would spawn a worker that
@@ -33,23 +33,23 @@ def test_ambient_tapeback_env_vars_are_cleared():
     each note to a real child process). Everything else must be gone.
     """
     pinned = {
-        "TAPEBACK_THERMAL_CLAMP_CHECK",
-        "TAPEBACK_ISOLATE_TRANSCRIPTION",
-        "TAPEBACK_NOTIFY",
-        "TAPEBACK_BACKGROUND",
+        "SIMIC_THERMAL_CLAMP_CHECK",
+        "SIMIC_ISOLATE_TRANSCRIPTION",
+        "SIMIC_NOTIFY",
+        "SIMIC_BACKGROUND",
     }
-    leaked = {k for k in os.environ if k.startswith("TAPEBACK_")} - pinned
+    leaked = {k for k in os.environ if k.startswith("SIMIC_")} - pinned
     assert leaked == set()
-    assert os.environ["TAPEBACK_THERMAL_CLAMP_CHECK"] == "false"
-    assert os.environ["TAPEBACK_ISOLATE_TRANSCRIPTION"] == "false"
-    assert os.environ["TAPEBACK_NOTIFY"] == "false"
-    assert os.environ["TAPEBACK_BACKGROUND"] == "false"
+    assert os.environ["SIMIC_THERMAL_CLAMP_CHECK"] == "false"
+    assert os.environ["SIMIC_ISOLATE_TRANSCRIPTION"] == "false"
+    assert os.environ["SIMIC_NOTIFY"] == "false"
+    assert os.environ["SIMIC_BACKGROUND"] == "false"
 
 
 def test_provider_api_keys_cannot_reach_a_test():
     """A developer's real ANTHROPIC_API_KEY must not survive into the suite.
 
-    Bug: isolation swept TAPEBACK_* only, but provider keys are read straight from
+    Bug: isolation swept SIMIC_* only, but provider keys are read straight from
     their own names (ANTHROPIC_API_KEY, GROQ_API_KEY, ...) in _resolve_api_key_for_provider.
     On a machine with any of them exported, _build_provider_chain returned a live key,
     so one summarizer test with a forgotten mock would have billed the real vendor.
@@ -65,7 +65,7 @@ def test_no_provider_chain_can_be_built_without_an_explicit_key(tmp_path):
 
 def test_env_var_set_inside_a_test_still_applies(monkeypatch):
     """Isolation must not break a test that deliberately sets a variable."""
-    monkeypatch.setenv("TAPEBACK_BEAM_SIZE", "1")
+    monkeypatch.setenv("SIMIC_BEAM_SIZE", "1")
     assert Settings().beam_size == 1
 
 
@@ -74,7 +74,7 @@ def test_nothing_the_suite_writes_lands_in_the_developers_home(tmp_path_factory)
     XDG directories, so every one of them has to resolve inside the suite's tmp dir.
 
     Bug: only XDG_STATE_HOME was redirected. Every test run wrote run records and
-    resume-cache entries into the real ~/.local/share/tapeback, and both keep a bounded
+    resume-cache entries into the real ~/.local/share/simic, and both keep a bounded
     number of entries (200), so the suite's records evicted the developer's real ones —
     174 of 200 run records on one machine were test sessions, and the whole resume cache
     had been replaced.
