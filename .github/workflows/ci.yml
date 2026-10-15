@@ -21,11 +21,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Both versions pyproject.toml declares. The AUR package runs on Arch's system
-        # Python, which is the newer one.
-        python-version: ["3.13", "3.14"]
+        # Both versions pyproject.toml declares, and both kinds of interpreter users get.
+        # 3.13 is python-build-standalone, as bundled in the .deb and installed by uv;
+        # it lacks libc features a distro build has (posix_spawn's setsid once broke
+        # `simic stop` there and nowhere else). 3.14 is a distro-style build, as on
+        # Arch, whose AUR package runs on the system Python.
+        include:
+          - python-version: "3.13"
+            standalone: true
+          - python-version: "3.14"
+            standalone: false
     env:
       UV_PYTHON: ${{ matrix.python-version }}
+      UV_PYTHON_PREFERENCE: ${{ matrix.standalone && 'only-managed' || 'only-system' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -36,6 +44,7 @@ jobs:
         run: python3 scripts/check-workflow-pins.py
 
       - name: Set up Python
+        if: ${{ !matrix.standalone }}
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}

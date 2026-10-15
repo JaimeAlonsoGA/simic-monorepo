@@ -25,8 +25,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`simic ui`: a window to record and set simic up.** One button records and stops; each recording is followed to its note — being transcribed and how far, waiting to be, then the transcripts newest first, five at a time, opening in Obsidian. A settings page covers the vault and its transcripts folder, the output and microphone recorded, the transcription engine, model, language and processor, speakers and the summary, each marked with what `doctor` says of it. Changes go straight to `~/.config/simic/.env`, so the window and the CLI never disagree. `simic ui --install` adds it to the applications menu. Needs PyGObject with GTK 4 and libadwaita from the system.
 - **`simic doctor` checks speakers and the summary**: pyannote and a Hugging Face token when diarization is on, an API key and the provider's package when summaries are. Either missing used to show only after a meeting, as a note without speakers or summary.
 - **Contributor docs for an open project**: `NOTICE` (simic's origin in tapeback), `SECURITY.md` with private reporting, a code of conduct, and bug and feature issue templates.
+- **Simic has an icon**: two creature eyes watching from the dark. It shows in the window, the tray when idle, desktop notifications, and the applications menu (`simic ui --install` puts it in your icon theme).
 
 ### Changed
+- **The app is called Simic** where a person sees it: the window title, the applications menu, the tray and notifications. The command, the package and every path stay `simic`.
 - **tapeback is now simic — Super Intelligent Mic.** The command is `simic`, the PyPI package `si-mic`, settings are `SIMIC_*` and read from `~/.config/simic/.env`; recordings, run records and the resume cache live under `~/.local/state/simic` and `~/.local/share/simic`. Coming from tapeback: rename the `TAPEBACK_` prefix in your `.env`, move it to `~/.config/simic/`, and finish any pending recording with `tapeback recover` first.
 - Defaults: `SIMIC_SAMPLE_RATE=16000` (Whisper's rate), `SIMIC_DEVICE=cpu`.
 - Loudness normalisation runs one ffmpeg per channel, side by side: 44 s instead of 86 s per hour of meeting, byte-identical output.
@@ -34,8 +36,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`simic stop` with nothing recording** says so, and points at `simic recover` when recordings wait to be transcribed, instead of a traceback.
 - **A transcripts or audio folder outside the vault is refused when settings load** (`SIMIC_MEETINGS_DIR`, `SIMIC_ATTACHMENTS_DIR`), not after the transcription, when the note was about to be written.
 - The default vault is `~/simic`: set `SIMIC_VAULT_PATH` to your Obsidian vault.
+- CI runs the tests on python-build-standalone as well — the interpreter of the `.deb` and of uv — which lacks libc features a distro Python has. It caught `stop` failing there before release: the background transcription now starts with `Popen`, not `posix_spawn(setsid=True)`.
+- The tray runs on [dbus-fast](https://github.com/bluetooth-devices/dbus-fast), the maintained fork of dbus-next: dbus-next 0.2.3, its last release, no longer imports on Python 3.15. The tray packages swap it on upgrade, and the `.deb` and Arch stands now install the tray and check it and the icon.
 
 ### Fixed
+- **`simic tray` no longer tells GNOME users with the AppIndicator extension enabled to install it.** The hint was guessed from the desktop on every start; it now follows a failed registration with the tray host, and only then.
 - **An interrupted first model download no longer breaks every run after it.** A download cut short left the model without `model.bin`; the cache lookup accepted it, and each run failed with `Unable to open file 'model.bin'` until the cache was deleted by hand. simic now downloads what is missing.
 - **Ctrl+C no longer loses the meeting.** A terminal sends Ctrl+C to its whole foreground process group, so the recorders died with the keystroke; `simic start` took that for a `simic stop` from another terminal and exited 0 — no note, no message, the audio orphaned. The recorders now run in a session of their own, and simic stops them itself, recorder before encoder.
 - **A recorder dying mid-meeting no longer discards the meeting.** One exited recorder (an unplugged headset, a PipeWire restart) made `start` return silently. It now names the channel that stopped and transcribes what was captured.
@@ -46,6 +51,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Docs
 - `docs/spec/BACKLOG.md` records the first CPU benchmark (threads, beam, batching, parallel channels) and how to repeat it on the recording machine.
+- Backlog: an automation panel, to chain what happens to a recording as blocks — the Obsidian note, a summary, Linear tickets, a webhook.
 
 ## [0.9.10] — 2026-10-10
 

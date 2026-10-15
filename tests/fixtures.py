@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
@@ -45,18 +45,9 @@ requires_pyannote = pytest.mark.skipif(
 )
 
 
-def _dbus_next_available() -> bool:
-    try:
-        import dbus_next  # noqa: F401, PLC0415
-
-        return True
-    except ImportError:
-        return False
-
-
-requires_dbus_next = pytest.mark.skipif(
-    not _dbus_next_available(),
-    reason="dbus-next not installed (install si-mic[tray])",
+requires_dbus = pytest.mark.skipif(
+    importlib.util.find_spec("dbus_fast") is None,
+    reason="dbus-fast not installed (install si-mic[tray])",
 )
 
 # --- pytest fixtures ---
@@ -223,6 +214,40 @@ def tray_app(settings):
     return app
 
 
+def _click_quit(menu) -> None:
+    """Click Quit the way a tray host does: find it in the layout, send `clicked`."""
+    _revision, (_root, _props, children) = menu.GetLayout.__wrapped__(menu, 0, -1, [])
+    quit_id = next(c.value[0] for c in children if c.value[1].get("label", "").value == "Quit")
+    menu.Event.__wrapped__(menu, quit_id, "clicked", None, 0)
+
+
+@pytest.fixture
+def session_bus(monkeypatch):
+    """The desktop's D-Bus session bus, for `simic tray` to run against. The
+    StatusNotifierWatcher is there — the GNOME AppIndicator extension or Plasma
+    provides it — unless the test sets `watcher_gone`. Once the tray has tried to
+    register, the user clicks Quit in its menu. Returns the fake bus; `registered` is
+    the watcher's RegisterStatusNotifierItem."""
+    bus = MagicMock(unique_name=":1.42", watcher_gone=False)
+    watcher = AsyncMock()
+    bus.get_proxy_object.return_value.get_interface.return_value = watcher
+    bus.registered = watcher.call_register_status_notifier_item
+    exported: dict[str, object] = {}
+    bus.export.side_effect = exported.__setitem__
+
+    async def introspect(_name, _path):
+        _click_quit(exported["/MenuBar"])
+        if bus.watcher_gone:
+            # What the bus answers when nothing owns the watcher's name.
+            raise RuntimeError("org.freedesktop.DBus.Error.ServiceUnknown")
+        return MagicMock()
+
+    bus.introspect = introspect
+    connect = AsyncMock(return_value=bus)
+    monkeypatch.setattr("simic.tray.MessageBus", lambda **_kw: MagicMock(connect=connect))
+    return bus
+
+
 @pytest.fixture
 def e2e_output_dir(tmp_path):
     """Temporary directory for intermediate pipeline files."""
@@ -359,8 +384,10 @@ def fake_notify_send(tmp_path, monkeypatch):
         calls = log.read_text().split("---\n")[:-1] if log.exists() else []
         result = []
         for call in calls:
-            app_name, title, *body = call.rstrip("\n").split("\n")
-            assert app_name == "--app-name=simic"
+            app_name, icon, title, *body = call.rstrip("\n").split("\n")
+            assert app_name == "--app-name=Simic"
+            assert icon.endswith("/icons/hicolor/256x256/apps/io.github.jaimealonsoga.simic.png")
+            assert Path(icon.removeprefix("--icon=")).is_file()
             result.append((title, "\n".join(body)))
         return result
 
@@ -396,9 +423,41 @@ def cpu_only(monkeypatch):
     monkeypatch.setenv("SIMIC_GPU_TELEMETRY", "false")
 
 
-# How long the simulated meeting may take to get both recorders writing. Bounds a wait
-# for a state reached in milliseconds; never asserted on.
-_RECORDERS_START_SECONDS = 5.0
+@pytest.fixture
+def interpreter_without_spawn_setsid(monkeypatch):
+    """os.posix_spawn as python-build-standalone has it — the interpreter of the .deb and
+    of uv. It is built against a glibc older than POSIX_SPAWN_SETSID, so `setsid=True`
+    raises NotImplementedError; everything else spawns for real."""
+    real_spawn = os.posix_spawn
+
+    def spawn(*args, setsid=False, **kwargs):
+        if setsid:
+            raise NotImplementedError("setsid is not supported on this platform")
+        return real_spawn(*args, **kwargs)
+
+    monkeypatch.setattr(os, "posix_spawn", spawn)
+
+
+# How long the simulated meeting may take to get both recorders writing. Reached in
+# milliseconds on an idle machine; the bound is for a loaded one — a gate running the
+# Docker stands beside the suite once took longer than 5 s.
+_RECORDERS_START_SECONDS = 30.0
+
+
+_RECORDERS_LATE = f"the fake recorders did not start in {_RECORDERS_START_SECONDS} s"
+
+
+def _wait_for_recorders(fake_parecord, sleep) -> bool:
+    """Whether both fake recorders captured their audio in time. A meeting stopped
+    before that is a different scenario, and its flow fails somewhere that says nothing
+    of why — so a late start is reported by name. Not raised from here: the stop still
+    has to happen, because simic's own stop is what ends the recorders."""
+    deadline = time.monotonic() + _RECORDERS_START_SECONDS
+    while len(fake_parecord()) < 2:
+        if time.monotonic() >= deadline:
+            return False
+        sleep(0.01)
+    return True
 
 
 @pytest.fixture
@@ -410,14 +469,17 @@ def ctrl_c_while_recording(monkeypatch, fake_parecord):
     has been recorded, not one that has not started yet. Only simic._watch's `time` is
     replaced; the recorder's own waits stay real."""
     real_sleep = time.sleep
+    late: list[bool] = []
 
     def _interrupt(_seconds: float) -> None:
-        deadline = time.monotonic() + _RECORDERS_START_SECONDS
-        while len(fake_parecord()) < 2 and time.monotonic() < deadline:
-            real_sleep(0.01)
+        if not _wait_for_recorders(fake_parecord, real_sleep):
+            late.append(True)
         raise KeyboardInterrupt
 
     monkeypatch.setattr(_watch, "time", SimpleNamespace(sleep=_interrupt))
+    yield
+    if late:
+        pytest.fail(_RECORDERS_LATE)
 
 
 @pytest.fixture
@@ -426,17 +488,21 @@ def mic_recorder_dies(monkeypatch, fake_parecord):
     restarted) while `simic start` waits. It is SIGKILLed, so no handler of its own
     runs, once both recorders have captured their audio."""
     real_sleep = time.sleep
+    late: list[bool] = []
 
     def _kill_mic(seconds: float) -> None:
-        deadline = time.monotonic() + _RECORDERS_START_SECONDS
-        while len(fake_parecord()) < 2 and time.monotonic() < deadline:
-            real_sleep(0.01)
+        if not _wait_for_recorders(fake_parecord, real_sleep):
+            late.append(True)
+            raise KeyboardInterrupt
         mic = next(call for call in fake_parecord() if call.device == "fake.mic")
         with contextlib.suppress(ProcessLookupError):
             os.kill(mic.pid, signal.SIGKILL)
         real_sleep(seconds)
 
     monkeypatch.setattr(_watch, "time", SimpleNamespace(sleep=_kill_mic))
+    yield
+    if late:
+        pytest.fail(_RECORDERS_LATE)
 
 
 # `simic start` as a terminal runs it, in a process of its own: the in-process
@@ -490,15 +556,15 @@ def ctrl_c_in_terminal(tmp_path, fake_parecord, cpu_only):
             text=True,
             start_new_session=True,
         )
-        deadline = time.monotonic() + _RECORDERS_START_SECONDS
-        while len(fake_parecord()) < 2 and time.monotonic() < deadline:
-            time.sleep(0.01)
+        started = _wait_for_recorders(fake_parecord, time.sleep)
         os.killpg(proc.pid, signal.SIGINT)
         try:
             output, _ = proc.communicate(timeout=_TERMINAL_RUN_SECONDS)
         except subprocess.TimeoutExpired:
             os.killpg(proc.pid, signal.SIGKILL)
             output, _ = proc.communicate()
+        if not started:
+            pytest.fail(f"{_RECORDERS_LATE}\n{output}")
         return TerminalRun(proc.returncode, output)
 
     return run
