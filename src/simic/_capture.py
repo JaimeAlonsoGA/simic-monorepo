@@ -71,6 +71,11 @@ def spawn(device: str, dest: Path, settings: Settings, work_dir: Path) -> tuple[
             "libmp3lame",
             "-b:a",
             f"{settings.mp3_bitrate_k}k",
+            # Write each frame as it is encoded. ffmpeg otherwise held the first tens of
+            # seconds in its buffer: the file sat at 0 bytes, the stall warning fired on a
+            # healthy recording, and the live checks had nothing to read.
+            "-flush_packets",
+            "1",
             str(dest),
         ],
         cwd=work_dir,

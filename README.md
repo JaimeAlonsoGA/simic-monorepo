@@ -30,7 +30,8 @@ and stop when it ends. A notification tells you when the note is ready.
 - **A window**: `simic ui` records, follows each recording to its note and sets Simic up — no terminal, no `.env` to edit
 - **System tray**: start/stop recording from the tray icon, no terminal needed
 - **CLI-first**: `simic start`, Ctrl+C to stop, done — the terminal is yours again at once; the note is made in the background, one meeting at a time
-- **Health checks**: `simic doctor` before a meeting; during one, warnings when a channel stops recording or the other side goes silent
+- **Calls on the speakers**: the mic is recorded through PipeWire's echo canceller, so what the speakers play is not transcribed again as yours; what slips through is taken out of the transcript by its words
+- **Health checks**: `simic doctor` before a meeting; during one, warnings when a channel stops recording, the other side goes silent, or the mic hears the speakers
 
 Simic is modular — the base package handles recording and transcription.
 Speaker diarization and LLM summaries are optional and installed separately.
@@ -139,7 +140,8 @@ That's it. The transcript is saved to `~/simic/meetings/` and the recording is
 deleted. While it records, the terminal shows how long and how much has been captured
 (`● REC 12:34  monitor 5.8 MB  mic 5.8 MB`), and warns if a channel stops being written,
 if the other side has been silent for three minutes (the call may be playing on an
-output simic is not recording), or if the disk cannot hold two hours of meeting.
+output Simic is not recording), if your mic is picking up the speakers, or if the disk
+cannot hold two hours of meeting.
 Ctrl+C gives the terminal back at once: the meeting is transcribed in the background,
 `simic status` shows how much is left (`transcribe mic: 40% (24:00 / 1:00:00), about
 18 min left`), and a desktop notification says when the note is ready — or why not.
@@ -341,7 +343,7 @@ the tally to stderr, so `--show-masked > sent.txt` gives you something to diff.
 ## CLI reference
 
 ```
-simic doctor                    Check tools, audio sources, vault, disk, model, speakers and summary before a meeting
+simic doctor                    Check tools, audio sources, echo cancellation, vault, disk, model, speakers and summary before a meeting
 simic start [NAME]              Start recording (Ctrl+C to stop; transcribed in the background)
 simic stop                      Stop recording from another terminal
 simic ui [--install]            The window: record, follow transcriptions, settings
@@ -473,6 +475,7 @@ All settings via environment variables (prefix `SIMIC_`) or
 | `SIMIC_VAD_FILTER` | `true` | Silero voice-activity detection before decoding. Load-bearing: it is a large part of why Whisper stopped hallucinating on silence. Turning it off is not a speed optimisation |
 | `SIMIC_CONDITION_ON_PREVIOUS_TEXT` | `false` | Feed the previous window's output back as a prompt. Whisper's own default is `true`; off here because it makes repeat loops much stickier |
 | `SIMIC_PAUSE_THRESHOLD` | `1.0` | Seconds; split segments on silence gaps >= this |
+| `SIMIC_ECHO_CANCEL` | `true` | Record the mic through PipeWire's WebRTC echo canceller (`libpipewire-module-echo-cancel`), so a call on the speakers is not transcribed twice. It takes the speakers' monitor as the reference and adds a source of its own for as long as the recording runs; the desktop's default devices and the call app's audio are left alone. Without PipeWire or its WebRTC plugin, the plain mic is recorded and `start` says so |
 | `SIMIC_GATE_MIC_SILENCE` | `true` | Silence the mic channel where you're only listening (mic quiet / monitor dominant) before transcription, so Whisper doesn't loop on the pauses. Dual-channel pipeline only |
 
 ### Live transcription
@@ -523,6 +526,24 @@ All settings via environment variables (prefix `SIMIC_`) or
 </details>
 
 ## Troubleshooting
+
+### The other side shows up under "You" too
+
+On the speakers, the mic hears the call. Call apps cancel that echo in what they send,
+but Simic records the mic itself, so without help everything the other person says
+comes back a second or two later as yours. Three things stand in the way:
+
+- **Echo cancellation** (`SIMIC_ECHO_CANCEL`, on): `simic start` prints
+  `Echo cancellation: on`, or why it is not. `simic doctor` loads it for a moment to
+  check. It needs PipeWire with its WebRTC plugin (`libspa-aec-webrtc`).
+- **A warning while recording**: `Warning: your mic is picking up the other side from
+  the speakers` — when the mic still follows the speakers for two minutes.
+- **The transcript**: a run of four or more words on your channel that repeats the
+  other side's within three seconds is taken out.
+
+Headphones remove the cause. A mic boosted far above its base volume (in `pactl list
+sources`, a volume well over the `Base Volume`) hears the room, and the speakers in it,
+much louder than your voice needs.
 
 ### Reading the processing output
 

@@ -12,6 +12,7 @@ import importlib.util
 import os
 import shutil
 import subprocess
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,7 +21,7 @@ from typing import Literal
 from faster_whisper.utils import download_model
 from huggingface_hub.errors import LocalEntryNotFoundError
 
-from simic import const
+from simic import _aec, _capture, const
 from simic.recorder import Recorder, detect_devices, session_root
 from simic.settings import Settings
 from simic.summarizer import available_providers
@@ -85,6 +86,23 @@ def _sources(settings: Settings) -> Check:
     except (RuntimeError, OSError, subprocess.CalledProcessError) as exc:
         return Check("Sources", "fail", str(exc))
     return Check("Sources", "ok", f"monitor {monitor}, mic {mic}")
+
+
+def _echo_cancel(settings: Settings) -> Check:
+    """Loads the canceller for a moment, as `start` would: only that shows the module and
+    its WebRTC plugin are there."""
+    if not settings.echo_cancel:
+        return Check("Echo cancellation", "ok", "off — on speakers the mic records the call too")
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            monitor, mic = detect_devices(settings)
+            canceller = _aec.start(mic, monitor, Path(tmp) / "echo-cancel.log")
+        # EchoCancelUnavailable is a RuntimeError, as detect_devices' own failures are.
+        except (RuntimeError, OSError, subprocess.CalledProcessError) as exc:
+            return Check("Echo cancellation", "warn", f"{exc} — on speakers, use headphones")
+    _capture.terminate(canceller.pid)
+    _capture.wait_and_kill([canceller.pid], _capture.RECORDER_STOP_SECONDS)
+    return Check("Echo cancellation", "ok", "PipeWire WebRTC canceller on the mic")
 
 
 def _vault(settings: Settings) -> Check:
@@ -186,6 +204,7 @@ CHECKS: tuple[Callable[[Settings], Check], ...] = (
     _tools,
     _sound_server,
     _sources,
+    _echo_cancel,
     _vault,
     _disk,
     _model,

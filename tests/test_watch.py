@@ -3,10 +3,20 @@ channels."""
 
 import shutil
 import subprocess
+import wave
 
+import numpy as np
 import pytest
 
-from simic._watch import CaptureStatus, CaptureWatch, SilenceWatch, format_status, peak_db
+from simic._watch import (
+    CaptureStatus,
+    CaptureWatch,
+    EchoWatch,
+    SilenceWatch,
+    echo_in_tail,
+    format_status,
+    peak_db,
+)
 from tests.fixtures import create_mono_wav
 
 
@@ -160,3 +170,83 @@ def test_an_unmeasurable_check_changes_nothing(tmp_path):
     watch.poll()
     clock.now += 60.0
     assert watch.poll() == {"monitor": 90.0}
+
+
+# --- the mic hearing the speakers -------------------------------------------------
+
+
+class _Correlations:
+    """The echo measured at each check, in order."""
+
+    def __init__(self, values):
+        self._values = iter(values)
+
+    def __call__(self, _mic, _monitor):
+        return next(self._values)
+
+
+def _echo_watch(tmp_path, values, clock):
+    return EchoWatch(
+        tmp_path / "mic.mp3",
+        tmp_path / "monitor.mp3",
+        measure=_Correlations(values),
+        clock=clock,
+        check_every=60.0,
+    )
+
+
+def test_echo_is_reported_after_two_checks_at_the_threshold(tmp_path):
+    """0.6 exactly counts; one check alone is not enough — it may be crosstalk."""
+    clock = _Clock()
+    watch = _echo_watch(tmp_path, [0.6, 0.6], clock)
+    assert watch.poll() is False  # no check before check_every
+    clock.now += 60.0
+    assert watch.poll() is False
+    clock.now += 60.0
+    assert watch.poll() is True
+
+
+def test_a_check_just_below_the_threshold_starts_over(tmp_path):
+    clock = _Clock()
+    watch = _echo_watch(tmp_path, [0.84, 0.59, 0.84], clock)
+    for _ in range(3):
+        clock.now += 60.0
+        assert watch.poll() is False
+
+
+def test_a_check_that_cannot_tell_keeps_the_count(tmp_path):
+    """The other side silent for a minute says nothing about the echo either way."""
+    clock = _Clock()
+    watch = _echo_watch(tmp_path, [0.84, None, 0.84], clock)
+    clock.now += 60.0
+    watch.poll()
+    clock.now += 60.0
+    assert watch.poll() is False
+    clock.now += 60.0
+    assert watch.poll() is True
+
+
+def _wav(path, samples: np.ndarray) -> None:
+    with wave.open(str(path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(16000)
+        wf.writeframes(samples.astype(np.int16).tobytes())
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg required")
+def test_the_end_of_a_mic_playing_back_the_monitor_is_an_echo(tmp_path):
+    rng = np.random.default_rng(1)
+    loudness = rng.uniform(0.05, 0.5, 600).repeat(800)
+    monitor = rng.standard_normal(len(loudness)) * loudness * 8000
+    _wav(tmp_path / "monitor.wav", monitor)
+    _wav(tmp_path / "mic.wav", monitor / 4)
+
+    correlation = echo_in_tail(tmp_path / "mic.wav", tmp_path / "monitor.wav")
+
+    assert correlation is not None
+    assert round(correlation, 6) == 1.0
+
+
+def test_a_channel_not_written_yet_tells_nothing(tmp_path):
+    assert echo_in_tail(tmp_path / "mic.mp3", tmp_path / "monitor.mp3") is None

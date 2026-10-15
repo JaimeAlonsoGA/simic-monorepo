@@ -119,8 +119,9 @@ SECTIONS: tuple[Section, ...] = (
         (
             Field("monitor_source", "What you hear", "choice", _monitors),
             Field("mic_source", "Microphone", "choice", _microphones),
+            Field("echo_cancel", "Cancel speaker echo", "switch"),
         ),
-        checks=("Tools", "Sound server", "Sources"),
+        checks=("Tools", "Sound server", "Sources", "Echo cancellation"),
     ),
     Section(
         "Transcription",

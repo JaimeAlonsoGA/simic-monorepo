@@ -240,6 +240,10 @@ class Settings(BaseSettings):
     # dominant) before transcription, so Whisper doesn't hallucinate loops on the
     # pauses (slow + garbage). Dual-channel (stereo) pipeline only.
     gate_mic_silence: bool = True
+    # Record the mic through PipeWire's echo canceller, so a call on the speakers is not
+    # transcribed a second time from the mic. Falls back to the plain mic, with a
+    # warning, where PipeWire or its WebRTC plugin is missing. See _aec.py.
+    echo_cancel: bool = True
 
     # Live transcription — opt-in. Off by default because mid-recording GPU
     # contention with the post-recording pipeline causes long stalls on small

@@ -68,6 +68,27 @@ def isolate_user_dirs(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path_factory.mktemp("data")))
 
 
+# `pw-cli` without PipeWire's echo-cancel module: it reads simic's command and says the
+# module did not load, as on a system without the WebRTC plugin.
+_PW_CLI_WITHOUT_AEC = """#!/usr/bin/env bash
+cat > /dev/null
+echo 'Error: "Could not load module"'
+"""
+
+
+@pytest.fixture(autouse=True)
+def isolate_pipewire(monkeypatch, tmp_path_factory):
+    """Keep every test off the developer's PipeWire. `simic start` loads an echo
+    canceller into the session's sound server through `pw-cli`; a test that starts a
+    Recorder would otherwise add a source to the real desktop. This `pw-cli` loads
+    nothing; `fake_pw_cli` is one that does."""
+    bin_dir = tmp_path_factory.mktemp("pw-cli-bin")
+    script = bin_dir / "pw-cli"
+    script.write_text(_PW_CLI_WITHOUT_AEC)
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+
+
 @pytest.fixture(autouse=True)
 def isolate_settings_sources(monkeypatch):
     """Cut Settings off from the developer's real configuration.
@@ -356,6 +377,54 @@ def fake_parecord(tmp_path, monkeypatch):
         ]
 
     return calls
+
+
+# `pw-cli` with the echo-cancel module: it answers the load as PipeWire 1.4 does, logs
+# its pid and what simic asked for, and runs until simic stops it.
+_FAKE_PW_CLI = """#!/usr/bin/env bash
+trap 'echo "$$ TERM" >> "$FAKE_PW_CLI_LOG.stops"; exit 0' TERM
+cat > "$FAKE_PW_CLI_LOG.command"
+echo '1 = @module:22'
+echo "$$" >> "$FAKE_PW_CLI_LOG"
+while :; do sleep 0.05; done
+"""
+
+
+@dataclass(frozen=True)
+class PwCliRun:
+    pid: int
+    command: str
+    stopped_by: str | None
+
+
+@pytest.fixture
+def fake_pw_cli(tmp_path, monkeypatch, fake_parecord):
+    """PipeWire with its echo canceller, for a recording made with fake_parecord: the
+    cancelled mic is the source `simic.echo-cancel`, which records the fake mic's audio.
+    Returns a callable listing the pw-cli processes started."""
+    audio = Path(os.environ["FAKE_PARECORD_AUDIO"])
+    shutil.copy(audio / "fake.mic.wav", audio / "simic.echo-cancel.wav")
+    bin_dir = tmp_path / "pw-cli-bin"
+    bin_dir.mkdir()
+    script = bin_dir / "pw-cli"
+    script.write_text(_FAKE_PW_CLI)
+    script.chmod(0o755)
+    log = tmp_path / "pw-cli.log"
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    monkeypatch.setenv("FAKE_PW_CLI_LOG", str(log))
+
+    def runs() -> list[PwCliRun]:
+        pids = log.read_text().split() if log.exists() else []
+        stops_file = Path(f"{log}.stops")
+        stops = (
+            dict(line.split() for line in stops_file.read_text().splitlines())
+            if stops_file.exists()
+            else {}
+        )
+        command = Path(f"{log}.command").read_text() if pids else ""
+        return [PwCliRun(int(pid), command, stops.get(pid)) for pid in pids]
+
+    return runs
 
 
 # `notify-send` as a desktop has it: each call appends its arguments, one per line,

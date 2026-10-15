@@ -5,10 +5,10 @@ from pathlib import Path
 
 import click
 
-from simic import const
+from simic import _aec, const
 from simic._background import last_status, process_in_background
 from simic._cli_gui import tray, ui
-from simic._watch import CaptureWatch, SilenceWatch, wait_while_recording
+from simic._watch import CaptureWatch, EchoWatch, SilenceWatch, wait_while_recording
 from simic.recorder import (
     NoActiveRecording,
     Recorder,
@@ -116,6 +116,8 @@ def start(
     click.echo(f"Recording started: {session_name}", err=True)
     click.echo(f"Monitor: {monitor}", err=True)
     click.echo(f"Mic: {mic}", err=True)
+    unavailable = (recorder.read_session() or {}).get("echo_cancel_unavailable")
+    click.echo(_aec.status_line(settings.echo_cancel, unavailable), err=True)
 
     mic_path = session_path / f"{const.CHANNEL_MIC}.{settings.audio_format}"
     monitor_path = session_path / f"{const.CHANNEL_MONITOR}.{settings.audio_format}"
@@ -136,7 +138,8 @@ def start(
     interrupted = False
     watch = CaptureWatch({const.CHANNEL_MONITOR: monitor_path, const.CHANNEL_MIC: mic_path})
     try:
-        wait_while_recording(recorder, watch, SilenceWatch({const.CHANNEL_MONITOR: monitor_path}))
+        silence = SilenceWatch({const.CHANNEL_MONITOR: monitor_path})
+        wait_while_recording(recorder, watch, silence, EchoWatch(mic_path, monitor_path))
     except KeyboardInterrupt:
         interrupted = True
 
