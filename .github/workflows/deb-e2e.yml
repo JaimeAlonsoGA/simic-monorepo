@@ -133,4 +133,7 @@ jobs:
               simic status
               echo "=== transcribing tests/smoke/speech.wav ==="
               /smoke/transcribe.sh
+              echo "=== the tray package and the icon ==="
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends /dist/simic-tray_*.deb
+              /smoke/desktop.sh /opt/simic/venv/bin/python
           '

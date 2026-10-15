@@ -10,8 +10,8 @@ Spec: https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/
 
 from collections.abc import Callable
 
-from dbus_next.constants import PropertyAccess
-from dbus_next.service import ServiceInterface, dbus_property, method, signal
+from dbus_fast.constants import PropertyAccess
+from dbus_fast.service import ServiceInterface, dbus_property, method, signal
 
 SNI_INTERFACE = "org.kde.StatusNotifierItem"
 SNI_OBJECT_PATH = "/StatusNotifierItem"
@@ -27,11 +27,15 @@ class StatusNotifierItem(ServiceInterface):
     when our state changes.
     """
 
-    def __init__(self, *, app_id: str, title: str, menu_path: str) -> None:
+    def __init__(
+        self, *, app_id: str, title: str, menu_path: str, icon_theme_path: str = ""
+    ) -> None:
         super().__init__(SNI_INTERFACE)
         self._id = app_id
         self._title = title
         self._menu_path = menu_path
+        # Where the host looks up an IconName that no system theme has: the app's own.
+        self._icon_theme_path = icon_theme_path
         self._icon_name = ""
         self._tooltip_title = title
         self._tooltip_text = ""
@@ -108,7 +112,7 @@ class StatusNotifierItem(ServiceInterface):
 
     @dbus_property(access=PropertyAccess.READ)
     def IconThemePath(self) -> "s":  # type: ignore[name-defined]  # ty:ignore[unresolved-reference]
-        return ""
+        return self._icon_theme_path
 
     @dbus_property(access=PropertyAccess.READ)
     def ToolTip(self) -> "(sa(iiay)ss)":  # type: ignore[name-defined]  # ty:ignore[invalid-syntax-in-forward-annotation]

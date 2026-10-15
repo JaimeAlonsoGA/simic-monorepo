@@ -48,7 +48,7 @@ _WAIT_OPTION = click.option(
 @click.group()
 @click.version_option(_pkg_version("si-mic"), prog_name="simic")
 def cli() -> None:
-    """simic — Super Intelligent Mic. Meetings into Obsidian notes.
+    """Simic — Super Intelligent Mic. Meetings into Obsidian notes.
 
     Records system audio + microphone via PipeWire/PulseAudio,
     transcribes locally with Whisper, identifies speakers with pyannote,

@@ -1,8 +1,8 @@
-"""Display server / desktop detection for the tray command.
+"""Display server / desktop detection for the tray command: which steps to give when
+no tray host took the icon.
 
-Lives apart from tray.py so it can be imported (and tested) without pulling in
-pystray — pystray does eager X server I/O at import time, which fails in
-headless test runs and CI containers.
+Lives apart from tray.py so it can be imported (and tested) without the optional
+D-Bus library.
 """
 
 import os

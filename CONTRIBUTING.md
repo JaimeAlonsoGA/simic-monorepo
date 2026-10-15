@@ -14,7 +14,7 @@ uv sync --group dev
 ```
 
 The dev group pulls in the optional extras (pyannote, torch, anthropic, openai,
-dbus-next) so the whole suite runs without further setup. Recording itself needs
+dbus-fast) so the whole suite runs without further setup. Recording itself needs
 PulseAudio or PipeWire, but no test records anything.
 
 ## Before opening a pull request

@@ -1,14 +1,14 @@
-# simic — Super Intelligent Mic
+# Simic — Super Intelligent Mic
 
 [![CI](https://github.com/JaimeAlonsoGA/simic-monorepo/actions/workflows/ci.yml/badge.svg)](https://github.com/JaimeAlonsoGA/simic-monorepo/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/si-mic)](https://pypi.org/project/si-mic/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 **Record any meeting on Linux, get a Markdown transcript in your Obsidian vault.**
-Press record in the simic window — or `simic start` in a terminal — when the call begins,
+Press record in the Simic window — or `simic start` in a terminal — when the call begins,
 and stop when it ends. A notification tells you when the note is ready.
 
-- **Any call app.** simic records what your computer plays and what your mic hears, via
+- **Any call app.** Simic records what your computer plays and what your mic hears, via
   PipeWire/PulseAudio — Google Meet, Zoom, Teams, Telegram, Discord, Slack huddles.
 - **Private by default.** Whisper transcribes on your machine. Nothing leaves it unless you
   opt into a remote transcription or summary provider.
@@ -27,12 +27,12 @@ and stop when it ends. A notification tells you when the note is ready.
 - **Stereo channel separation**: your mic (left) vs. others (right) for accurate "You" attribution
 - **Obsidian-native output**: Markdown with YAML frontmatter, a wikilink to the audio when it is kept
 - **LLM summarization**: Anthropic, OpenAI, Groq, Gemini, DeepSeek, OpenRouter, Qwen (with automatic provider fallback)
-- **A window**: `simic ui` records, follows each recording to its note and sets simic up — no terminal, no `.env` to edit
+- **A window**: `simic ui` records, follows each recording to its note and sets Simic up — no terminal, no `.env` to edit
 - **System tray**: start/stop recording from the tray icon, no terminal needed
 - **CLI-first**: `simic start`, Ctrl+C to stop, done — the terminal is yours again at once; the note is made in the background, one meeting at a time
 - **Health checks**: `simic doctor` before a meeting; during one, warnings when a channel stops recording or the other side goes silent
 
-simic is modular — the base package handles recording and transcription.
+Simic is modular — the base package handles recording and transcription.
 Speaker diarization and LLM summaries are optional and installed separately.
 
 ## Installation
@@ -95,7 +95,7 @@ sudo apt install python3 pipx ffmpeg pulseaudio-utils
 sudo dnf install python3 pipx ffmpeg pipewire-pulseaudio
 ```
 
-Then install simic:
+Then install Simic:
 
 ```bash
 uv tool install si-mic                          # recording + transcription
@@ -132,7 +132,7 @@ simic doctor                    # once: is everything a meeting needs in place?
 simic start                     # start recording, Ctrl+C to stop
 ```
 
-Prefer a window? `simic ui --install` adds simic to your applications menu — see
+Prefer a window? `simic ui --install` adds Simic to your applications menu — see
 [Window](#window).
 
 That's it. The transcript is saved to `~/simic/meetings/` and the recording is
@@ -182,7 +182,7 @@ Type=Application
 X-GNOME-Autostart-enabled=true
 ```
 
-simic's tray speaks the StatusNotifierItem D-Bus protocol directly — no
+Simic's tray speaks the StatusNotifierItem D-Bus protocol directly — no
 pystray, no GTK, no XEmbed. KDE Plasma, Hyprland (with waybar), and Sway
 (with waybar/eww) display it out of the box on both X11 and Wayland.
 
@@ -201,14 +201,14 @@ sudo dnf install gnome-shell-extension-appindicator
 
 Open the **Extensions** app, enable **Ubuntu AppIndicators** (or
 **AppIndicator and KStatusNotifierItem Support**), log out + back in.
-`simic tray` prints this hint to stderr on startup if it detects an
-affected session.
+`simic tray` prints these steps when no tray host takes its icon, and stays
+quiet when one does.
 
 ## Window
 
 ```bash
 simic ui              # open it
-simic ui --install    # once: add simic to the applications menu
+simic ui --install    # once: add Simic, with its icon, to the applications menu
 ```
 
 Two pages. **Record**: one button, the time, and every recording after it — being
@@ -235,14 +235,14 @@ sudo dnf install python3-gobject libadwaita          # Fedora
 sudo pacman -S python-gobject libadwaita             # Arch
 ```
 
-Install simic where it can see them: `pipx install --system-site-packages simic`,
+Install Simic where it can see them: `pipx install --system-site-packages simic`,
 or a venv made with `python3 -m venv --system-site-packages`. The `.deb` and AUR packages
 bundle their own interpreter and do not ship the window yet.
 
 ## Speaker diarization
 
 Speaker diarization identifies who said what in the recording. Without it,
-simic uses stereo channels: your mic is labeled "You", everything else
+Simic uses stereo channels: your mic is labeled "You", everything else
 is labeled "Other".
 
 To enable diarization, you need a HuggingFace token with access to pyannote models:
@@ -262,7 +262,7 @@ SIMIC_HF_TOKEN=hf_your_token_here
 
 ## LLM summarization
 
-After transcription, simic can add a brief summary, action items, and key
+After transcription, Simic can add a brief summary, action items, and key
 decisions using an LLM.
 
 Set an API key for at least one provider in `~/.config/simic/.env`:
@@ -282,7 +282,7 @@ GEMINI_API_KEY=...
 | `deepseek` | `DEEPSEEK_API_KEY` | deepseek-chat |
 | `qwen` | `DASHSCOPE_API_KEY` | qwen-turbo |
 
-If the primary provider fails, simic automatically tries the next available
+If the primary provider fails, Simic automatically tries the next available
 provider (any provider with an API key set).
 
 ### PII masking
@@ -321,7 +321,7 @@ refused with a warning — masking those would break speaker attribution and pro
 nothing.
 
 **Matching is literal.** A term is masked in exactly the forms you list. In an
-inflected language every form needs its own entry (`Ivan, Ivana, Ivanu`) — simic
+inflected language every form needs its own entry (`Ivan, Ivana, Ivanu`) — Simic
 does not guess them, because guessing would silently rewrite unrelated words.
 `SIMIC_MASK_PII=true` is a floor, not a guarantee that the provider sees nothing
 personal.
@@ -448,7 +448,7 @@ All settings via environment variables (prefix `SIMIC_`) or
 | `SIMIC_STT_FFMPEG_TIMEOUT` | `120` | Wall-clock timeout for ffmpeg encode/slice used to prepare remote uploads |
 | `SIMIC_LANGUAGE` | `auto` | Language code (`auto` for auto-detection, or `en`, `ru`, `fr`, etc.) |
 | `SIMIC_DEVICE` | `cpu` | `cuda` or `cpu`. Local backend only |
-| `SIMIC_GPU_TELEMETRY` | `true` | Sample GPU clocks/temperature during transcription and print a one-line summary per stage. Observation only — simic never changes clock or power caps. No-op without `nvidia-smi` or on `cpu` |
+| `SIMIC_GPU_TELEMETRY` | `true` | Sample GPU clocks/temperature during transcription and print a one-line summary per stage. Observation only — Simic never changes clock or power caps. No-op without `nvidia-smi` or on `cpu` |
 | `SIMIC_RESUME_CACHE` | `true` | Reuse a channel already transcribed from the same audio with the same output-affecting settings, so an interrupted run does not redo finished work. Changing the model, glossary, language or any decoding setting invalidates it |
 | `SIMIC_RESUME_CACHE_DIR` | *(XDG)* | Where reusable channel results go. Default `~/.local/share/simic/resume` |
 | `SIMIC_ISOLATE_TRANSCRIPTION` | `true` | Run transcription in a child process. A CUDA out-of-memory permanently leaks VRAM inside the process it happens in — a child can simply exit and the kernel reclaims it. Costs one process start and model load per run; set `false` to transcribe in-process |
@@ -463,13 +463,13 @@ All settings via environment variables (prefix `SIMIC_`) or
 | `SIMIC_BEAM_SIZE` | `4` | Whisper beam search width (lower = faster, slightly less accurate) |
 | `SIMIC_CPU_THREADS` | `0` | Threads Whisper decodes with on the CPU. `0` is faster-whisper's default of 4, whatever the machine has |
 | `SIMIC_TEMPERATURE` | `[0.0, 0.2, 0.4, 0.6, 0.8, 1.0]` | Temperature fallback ladder. The high steps break Whisper out of hallucination loops on noisy audio — don't shorten unless your input is clean (shortening can cause repeat loops: slower *and* worse) |
-| `SIMIC_BATCH_SIZE` | `0` | Batched inference (faster-whisper `BatchedInferencePipeline`) — processes VAD segments in parallel, several× faster on GPU. `0` = off; try `8`. On small GPUs (≤4 GB) it may OOM even at `4` — use `2`, pair with `SIMIC_COMPUTE_TYPE=int8`, or keep `0`. OOM falls back to CPU automatically. **Batching silently ignores `no_speech_threshold`, `condition_on_previous_text` and all but the first `temperature` value** — simic warns which ones when you enable it |
+| `SIMIC_BATCH_SIZE` | `0` | Batched inference (faster-whisper `BatchedInferencePipeline`) — processes VAD segments in parallel, several× faster on GPU. `0` = off; try `8`. On small GPUs (≤4 GB) it may OOM even at `4` — use `2`, pair with `SIMIC_COMPUTE_TYPE=int8`, or keep `0`. OOM falls back to CPU automatically. **Batching silently ignores `no_speech_threshold`, `condition_on_previous_text` and all but the first `temperature` value** — Simic warns which ones when you enable it |
 | `SIMIC_CHUNK_LENGTH` | `30` | Seconds of audio consumed per decode window. **Do not lower this to fight hallucinations.** Whisper's encoder is fixed at 30 s and every window is zero-padded back to it, so a smaller value does not make a pass cheaper — it only needs more of them. Measured on a 145 s file: `2` → 390.6 s, `7` → 116.8 s, `30` → 41.4 s |
 | `SIMIC_NO_SPEECH_THRESHOLD` | `0.4` | Whisper silence-rejection threshold (lower = more aggressive; suppresses training-data hallucinations on pauses) |
 | `SIMIC_LANGUAGE_DETECTION_SEGMENTS` | `1` | Segments probed before deciding the language; raise (e.g. `4`) if a channel that starts silent gets the wrong language |
 | `SIMIC_MULTILINGUAL` | `false` | Per-segment language detection for mixed-language recordings (code-switching). Less stable than a fixed `SIMIC_LANGUAGE` |
 | `SIMIC_HALLUCINATION_SILENCE_THRESHOLD` | *(off)* | Seconds; skip silent gaps when a hallucination is detected. ⚠ Triggers per-segment re-processing — can be **much slower** on pause-heavy channels (e.g. the mic). Leave off unless it measurably helps your audio |
-| `SIMIC_HOTWORDS` | *(project glossary)* | Comma-separated terms decoding is biased towards — see [`src/simic/glossary.py`](src/simic/glossary.py). Whisper mangles English terms embedded in Russian speech ("simic" → "ты пупа ты бэк"); with the glossary it comes back as "simic". Replace with your own domain vocabulary; empty disables the bias. **Keep it under ~223 tokens (~670 characters)** — faster-whisper silently truncates beyond that, so extra terms stop working with no warning |
+| `SIMIC_HOTWORDS` | *(project glossary)* | Comma-separated terms decoding is biased towards — see [`src/simic/glossary.py`](src/simic/glossary.py). Whisper mangles English terms embedded in Russian speech ("tapeback", this project's name before Simic, came back as "ты пупа ты бэк"); with the glossary it comes back as "tapeback". Replace with your own domain vocabulary; empty disables the bias. **Keep it under ~223 tokens (~670 characters)** — faster-whisper silently truncates beyond that, so extra terms stop working with no warning |
 | `SIMIC_VAD_FILTER` | `true` | Silero voice-activity detection before decoding. Load-bearing: it is a large part of why Whisper stopped hallucinating on silence. Turning it off is not a speed optimisation |
 | `SIMIC_CONDITION_ON_PREVIOUS_TEXT` | `false` | Feed the previous window's output back as a prompt. Whisper's own default is `true`; off here because it makes repeat loops much stickier |
 | `SIMIC_PAUSE_THRESHOLD` | `1.0` | Seconds; split segments on silence gaps >= this |
@@ -496,7 +496,7 @@ All settings via environment variables (prefix `SIMIC_`) or
 | `SIMIC_NOTIFY` | `true` | Desktop notification (`notify-send`) when a note is ready or could not be made |
 | `SIMIC_BACKGROUND` | `true` | Once a recording stops, transcribe it in a detached process (`simic recover NAME`) and give the terminal back. Its output goes to `processing.log` in the session directory, which `simic status` reads. `--wait` on `start`/`stop` overrides it for one run |
 | `SIMIC_KEEP_AUDIO` | `false` | Archive the recording in the vault (`SIMIC_ATTACHMENTS_DIR`) and link it from the note. Off: the audio is deleted once the note is written |
-| `SIMIC_SESSIONS_DIR` | *(XDG)* | Where recordings in progress live: about 60 MB per hour while recording, plus about 460 MB per hour of temporary files while it is processed. Default `~/.local/state/simic/sessions`. An absolute path: `~` is not expanded. Must be private to you (mode `0700`); simic refuses one other users can reach. A session that failed to process stays here, so it can be recovered |
+| `SIMIC_SESSIONS_DIR` | *(XDG)* | Where recordings in progress live: about 60 MB per hour while recording, plus about 460 MB per hour of temporary files while it is processed. Default `~/.local/state/simic/sessions`. An absolute path: `~` is not expanded. Must be private to you (mode `0700`); Simic refuses one other users can reach. A session that failed to process stays here, so it can be recovered |
 | `SIMIC_TIMEZONE` | *(system)* | Time zone for naming a recording, and so for the note's file name, date and time. An IANA name such as `Europe/Madrid`, or `UTC`. Unset: the machine's own zone |
 
 ### Speaker diarization
@@ -610,7 +610,7 @@ you are using the machine, it will not release — so waiting for it is not a st
 `SIMIC_THERMAL_CLAMP_WAIT` defaults to 0.
 
 **The CPU is faster in this state** — 2.39× real time against 0.31× on the clamped GPU.
-simic checks before each stage and moves to the CPU, saying so. Disable with
+Simic checks before each stage and moves to the CPU, saying so. Disable with
 `SIMIC_THERMAL_CLAMP_CPU_FALLBACK=false`.
 
 **A run that fell back is not stuck there.** The check is retaken for every stage, each of
@@ -630,7 +630,7 @@ To avoid it rather than react to it, set `SIMIC_STAGE_PAUSE_SECONDS=60` so long
 recordings shed heat between channels. The larger lever is the CPU, not the GPU — these
 machines often ship with a sustained CPU power limit well above the chip's class, and
 capping it (or disabling turbo) keeps the whole system out of the clamp. That needs root,
-so simic does not do it for you.
+so Simic does not do it for you.
 
 ### GPU transcription falls back to CPU on CUDA 13 systems
 
@@ -639,7 +639,7 @@ your system has CUDA 13 (e.g. recent Arch) but faster-whisper's ctranslate2 back
 built against CUDA 12 and can't find `libcublas.so.12` / `libcudnn.so.9`. Diarization
 (PyTorch) still uses the GPU, but transcription drops to slow CPU.
 
-Install the CUDA 12 runtime libraries — simic preloads them automatically:
+Install the CUDA 12 runtime libraries — Simic preloads them automatically:
 
 ```bash
 # Arch (AUR) — recommended:
@@ -656,7 +656,7 @@ sudo /opt/simic/bin/pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
 ```
 
 They install alongside the CUDA 13 libraries without conflict. No `LD_LIBRARY_PATH`
-needed: when `SIMIC_DEVICE=cuda`, simic finds and preloads them
+needed: when `SIMIC_DEVICE=cuda`, Simic finds and preloads them
 on startup. If they're not installed, transcription falls back to CPU with the message
 above.
 
@@ -702,7 +702,7 @@ Ideas and bug reports are welcome in the [issues](https://github.com/JaimeAlonso
 
 ## Origins
 
-simic began as a fork of [tapeback](https://github.com/yastcher/tapeback) by Yast, and
+Simic began as a fork of [tapeback](https://github.com/yastcher/tapeback) by Yast, and
 keeps its git history. It has since been reworked into a project of its own — light
 capture, crash-safe recording and recovery, background transcription, recording health
 checks, desktop notifications and a new command line among the changes; see the
@@ -710,7 +710,7 @@ checks, desktop notifications and a new command line among the changes; see the
 
 **Coming from tapeback?** Settings keep their names under a new prefix: rename
 `TAPEBACK_` to `SIMIC_` in your `.env` and move it to `~/.config/simic/`. Finish any
-pending recording with `tapeback recover` before uninstalling tapeback — simic keeps its
+pending recording with `tapeback recover` before uninstalling tapeback — Simic keeps its
 recordings in its own directory and does not see tapeback's.
 
 ## Contributing

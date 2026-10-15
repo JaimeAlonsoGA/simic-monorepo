@@ -3,9 +3,9 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from tests.fixtures import requires_dbus_next
+from tests.fixtures import requires_dbus
 
-pytestmark = requires_dbus_next
+pytestmark = requires_dbus
 
 from simic._sni import StatusNotifierItem, register_with_watcher  # noqa: E402
 
@@ -96,3 +96,10 @@ def test_sni_full_lifecycle_flow():
     sni.set_status("Active")
     assert sni.IconName == "audio-input-microphone-symbolic"
     assert sni.Status == "Active"
+
+
+def test_icon_theme_path_points_the_host_at_the_apps_own_theme():
+    sni = StatusNotifierItem(
+        app_id="simic", title="Simic", menu_path="/MenuBar", icon_theme_path="/opt/simic/icons"
+    )
+    assert sni.IconThemePath == "/opt/simic/icons"
