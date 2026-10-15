@@ -284,3 +284,61 @@ real x86 cores and both "more threads" and "both channels at once" may well pay:
 
 If threads scale there, parallel channels (two workers, threads split between them) is
 the next experiment — a pipeline change, so it waits for that table.
+
+---
+
+## 8. Automation panel: what happens to a recording, as blocks
+
+**The goal.** Today every recording walks one fixed road: record → process the audio
+→ transcribe → speakers → note in Obsidian → summary. The panel lets a person decide
+the road, in the window, by chaining blocks: *record → process audio → Obsidian →
+summarize → Linear tickets → send to OpenAI → call my aunt*. Simic fills up with
+integrations, each one a block.
+
+**Scope: the basics, not Zapier.** Only what one person does with the transcript of an
+interview, a meeting or a lecture. A first set:
+
+- **Already there, to become blocks:** audio processing, transcription, speakers, the
+  Obsidian note, the summary.
+- **Tasks:** action items into Linear (later GitHub Issues, Todoist).
+- **An LLM with your own prompt:** "interview questions I missed", "draft the
+  follow-up email", the answer appended to the note.
+- **Send:** e-mail the summary, post to Slack or Discord, a generic webhook (covers
+  n8n, Zapier, Home Assistant — and the aunt).
+- **Files:** export as `.srt`, `.txt`, `.docx`; copy the summary to the clipboard.
+- **Run a command of your own** with the note's path, as argv (never `shell=True`).
+
+**Types before the panel.** A block takes and gives artifacts: `Audio`, `Transcript`,
+`Note`, `Summary`, `ActionItems`. Typed inputs let the panel refuse a chain that cannot
+run (Linear needs `ActionItems`, which only the summary gives) when it is built, not
+after the meeting. Artifacts go in `models.py`; blocks do not.
+
+**Constraints the design must keep:**
+
+- **Privacy.** Every block that sends *text* goes through `summarizer.summarize()`'s
+  masking seam (`_mask.py`), never around it. A block that sends *audio* is a second
+  remote-STT case: masking cannot apply, so the panel says so. The default chain stays
+  local; nothing new leaves the machine unless the person adds the block.
+- **Idempotency.** `simic recover` reruns a session. A block with outside effects
+  (tickets, e-mail, webhook) records what it did in the run record (`_runlog.py`) and
+  is not repeated — two sets of tickets for one meeting is a bug.
+- **A failed block loses nothing.** The note exists before any integration runs; a
+  failed block is reported (notification, `simic status`) and can be retried alone.
+- **Secrets** are one `.env` setting per integration (`SIMIC_LINEAR_API_KEY`, ...),
+  added to `isolate_settings_sources` the day they are added.
+
+**Open questions:**
+
+- **Where a chain lives.** "No config files besides pyproject.toml" rules out a YAML
+  pipeline. A chain as a list setting (`SIMIC_AUTOMATION=summarize,linear,webhook`)
+  fits `.env` until blocks need options of their own; then the rule itself needs a
+  decision, not a workaround.
+- **One chain or several.** Per kind of recording (interview vs standup), chosen in the
+  window before or after recording?
+- **Review before sending.** Tickets and e-mails are outward-facing: create them
+  directly, or show them first and send on a click?
+- **Optional dependencies.** One extra per integration (`si-mic[linear]`), as with the
+  summary and speakers, or plain HTTP with the standard library?
+
+Not started. The first step is the artifact types and turning the existing stages
+into blocks with no change in behaviour; integrations come one at a time after that.
