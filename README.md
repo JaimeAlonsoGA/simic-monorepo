@@ -3,6 +3,7 @@
 [![CI](https://github.com/JaimeAlonsoGA/simic-monorepo/actions/workflows/ci.yml/badge.svg)](https://github.com/JaimeAlonsoGA/simic-monorepo/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/si-mic)](https://pypi.org/project/si-mic/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Website](https://img.shields.io/badge/web-si--mic.vercel.app-8c5aff)](https://si-mic.vercel.app)
 
 **Record any meeting on Linux, get a Markdown transcript in your Obsidian vault.**
 Press record in the simic window — or `simic start` in a terminal — when the call begins,

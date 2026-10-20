@@ -46,6 +46,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Docs
 - `docs/spec/BACKLOG.md` records the first CPU benchmark (threads, beam, batching, parallel channels) and how to repeat it on the recording machine.
+- **Website.** [si-mic.vercel.app](https://si-mic.vercel.app): what simic does, how to install it, and an `llms.txt` for AI agents.
 
 ## [0.9.10] — 2026-10-10
 

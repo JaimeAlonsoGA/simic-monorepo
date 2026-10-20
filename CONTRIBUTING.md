@@ -83,6 +83,14 @@ Every commit pushed to a PR re-runs lint, format, types and tests, on Python 3.1
 and install it in six Ubuntu and Debian containers, and build the AUR package in an
 Arch container.
 
+## The website
+
+[si-mic.vercel.app](https://si-mic.vercel.app) is the static page in `site/`: one HTML
+file with no script, plus `llms.txt` for AI agents, `robots.txt`, `sitemap.xml` and the
+icons. It is deployed by hand from the repo root with `vercel deploy site --prod`.
+What it claims — commands, settings, the install line — must hold for `main`; update it
+with the README when they change.
+
 ## Reporting a bug
 
 Include the simic version, distro, whether audio came from PulseAudio or PipeWire,

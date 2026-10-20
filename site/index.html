@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simic — Record and transcribe any meeting on Linux, locally</title>
+<meta name="description" content="Simic is a free, open-source meeting recorder for Linux. It records Google Meet, Zoom, Teams or any call through PipeWire, transcribes it on your machine with Whisper and saves a Markdown note in Obsidian.">
+<link rel="canonical" href="https://si-mic.vercel.app/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta name="author" content="Jaime Alonso">
+<meta name="theme-color" content="#0b0a10">
+<meta name="color-scheme" content="dark">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Simic">
+<meta property="og:url" content="https://si-mic.vercel.app/">
+<meta property="og:title" content="Simic — Record and transcribe any meeting on Linux, locally">
+<meta property="og:description" content="Open-source meeting recorder for Linux. Any call app, transcribed on your machine with Whisper, saved as Markdown in Obsidian.">
+<meta property="og:image" content="https://si-mic.vercel.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Simic: two glowing eyes, violet and teal, beside the words Record any meeting on Linux">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Simic — Record and transcribe any meeting on Linux, locally">
+<meta name="twitter:description" content="Open-source meeting recorder for Linux. Any call app, transcribed on your machine, saved as Markdown in Obsidian.">
+<meta name="twitter:image" content="https://si-mic.vercel.app/og.png">
+
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="alternate" type="text/plain" href="/llms.txt" title="LLM-readable summary">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://si-mic.vercel.app/#app",
+      "name": "Simic",
+      "alternateName": ["simic", "Super Intelligent Mic", "si-mic"],
+      "description": "Open-source meeting recorder for Linux. Records any call app through PipeWire or PulseAudio, transcribes it locally with faster-whisper, and saves a Markdown note with YAML frontmatter in an Obsidian vault. Optional speaker diarization and LLM summaries.",
+      "url": "https://si-mic.vercel.app/",
+      "image": "https://si-mic.vercel.app/icon-512.png",
+      "screenshot": "https://si-mic.vercel.app/og.png",
+      "applicationCategory": "MultimediaApplication",
+      "applicationSubCategory": "Meeting transcription",
+      "operatingSystem": "Linux",
+      "softwareRequirements": "Python 3.13+, ffmpeg, PipeWire or PulseAudio",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "codeRepository": "https://github.com/JaimeAlonsoGA/simic-monorepo",
+      "downloadUrl": "https://github.com/JaimeAlonsoGA/simic-monorepo",
+      "installUrl": "https://si-mic.vercel.app/#install",
+      "featureList": [
+        "Records Google Meet, Zoom, Microsoft Teams, Telegram, Discord, Slack and any other call app",
+        "Local transcription with faster-whisper on CPU or CUDA GPU",
+        "Markdown notes with YAML frontmatter in an Obsidian vault",
+        "Your mic and the other side on separate stereo channels",
+        "Optional speaker diarization with pyannote",
+        "Optional LLM summaries: Anthropic, OpenAI, Groq, Gemini, DeepSeek, OpenRouter, Qwen",
+        "Optional live transcription during the meeting",
+        "Command line, GTK window and system tray",
+        "Recordings survive crashes and are recovered with simic recover"
+      ],
+      "keywords": "meeting recorder, Linux, transcription, Whisper, faster-whisper, Obsidian, PipeWire, PulseAudio, local, offline, open source, diarization, meeting notes",
+      "author": { "@id": "https://si-mic.vercel.app/#author" }
+    },
+    {
+      "@type": "Person",
+      "@id": "https://si-mic.vercel.app/#author",
+      "name": "Jaime Alonso",
+      "url": "https://jaimealonso.dev",
+      "sameAs": ["https://github.com/JaimeAlonsoGA"]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://si-mic.vercel.app/#site",
+      "name": "Simic",
+      "url": "https://si-mic.vercel.app/",
+      "inLanguage": "en",
+      "publisher": { "@id": "https://si-mic.vercel.app/#author" }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Does Simic send my meetings to the cloud?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. Whisper transcribes on your own machine. Audio leaves it only if you opt into remote transcription (OpenAI), and text only if you turn on an LLM summary; emails, phone numbers and names you list can be masked first." }
+        },
+        {
+          "@type": "Question",
+          "name": "Which call apps does Simic work with?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Any of them. Simic records what your computer plays and what your microphone hears at the system level, so Google Meet, Zoom, Microsoft Teams, Telegram, Discord, Slack huddles and browser calls all work. No bot joins the call." }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I need Obsidian?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. Simic writes plain Markdown files to ~/simic/meetings by default. Point SIMIC_VAULT_PATH at an Obsidian vault and the notes appear there, with YAML frontmatter." }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it need a GPU?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. faster-whisper runs on the CPU by default. An NVIDIA GPU with CUDA makes transcription and speaker diarization much faster." }
+        },
+        {
+          "@type": "Question",
+          "name": "What happens if my computer crashes during a meeting?",
+          "acceptedAnswer": { "@type": "Answer", "text": "The recording is kept until a note exists. simic status lists what is pending and simic recover finishes it." }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Simic free?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. Simic is open source under the Apache 2.0 license." }
+        }
+      ]
+    }
+  ]
+}
+</script>
+
+<style>
+  :root {
+    --bg: #0b0a10;
+    --surface: #14121c;
+    --line: #26222f;
+    --text: #f2f0f7;
+    --muted: #a9a4b8;
+    --violet: #b07cff;
+    --teal: #3ee6d0;
+    --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "DejaVu Sans Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(60rem 40rem at 15% -10%, rgba(140, 90, 255, .16), transparent 60%),
+      radial-gradient(50rem 35rem at 100% 0%, rgba(40, 200, 190, .10), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Inter, Roboto, "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--teal); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:hover { color: var(--text); }
+  :focus-visible { outline: 2px solid var(--violet); outline-offset: 3px; border-radius: 4px; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; font-weight: 650; letter-spacing: -.01em; }
+  .brand img { border-radius: 8px; }
+  nav ul { display: flex; gap: 22px; list-style: none; margin: 0; padding: 0; font-size: 15px; }
+  nav ul a { color: var(--muted); text-decoration: none; }
+  nav ul a:hover { color: var(--text); }
+
+  header.hero { text-align: center; padding: 72px 0 56px; }
+  .hero img { width: 132px; height: 132px; border-radius: 30px; box-shadow: 0 20px 80px -20px rgba(150, 100, 255, .55); }
+  h1 { font-size: clamp(2.2rem, 5.5vw, 3.6rem); line-height: 1.08; letter-spacing: -.035em; margin: 32px auto 18px; max-width: 14em; font-weight: 750; }
+  h1 .accent { background: linear-gradient(90deg, var(--violet), var(--teal)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { color: var(--muted); font-size: 1.15rem; max-width: 36em; margin: 0 auto 34px; }
+
+  .install { display: inline-flex; align-items: center; gap: 12px; max-width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; font: 14.5px/1.4 var(--mono); text-align: left; overflow-x: auto; }
+  .install .prompt { color: var(--violet); user-select: none; }
+  .install code { white-space: nowrap; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+  .btn { display: inline-block; padding: 11px 20px; border-radius: 10px; font-weight: 600; font-size: 15px; text-decoration: none; border: 1px solid var(--line); color: var(--text); }
+  .btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .btn.primary:hover { background: var(--teal); border-color: var(--teal); color: var(--bg); }
+  .btn:hover { border-color: var(--muted); }
+  .apps { color: var(--muted); font-size: 14px; margin-top: 34px; }
+
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 1.7rem; letter-spacing: -.02em; margin: 0 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 32px; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  .card h3 { margin: 0 0 6px; font-size: 1.02rem; }
+  .card p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; background: var(--violet); }
+  .card:nth-child(even) .dot { background: var(--teal); }
+
+  ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 0; display: grid; gap: 14px; }
+  ol.steps li { counter-increment: s; display: grid; grid-template-columns: 44px 1fr; gap: 14px; align-items: start; }
+  ol.steps li::before { content: counter(s); width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line); color: var(--teal); font: 600 14px var(--mono); }
+  ol.steps p { margin: 4px 0 0; color: var(--muted); }
+  ol.steps strong { color: var(--text); }
+
+  pre { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; overflow-x: auto; font: 14px/1.65 var(--mono); color: var(--muted); margin: 0; }
+  pre .k { color: var(--violet); }
+  pre .h { color: var(--text); font-weight: 700; }
+  pre .s { color: var(--teal); }
+  code { font-family: var(--mono); font-size: .92em; }
+  p code, li code, dd code { background: var(--surface); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 760px) { .two, .grid { grid-template-columns: 1fr; } nav ul { display: none; } header.hero { padding-top: 40px; } }
+
+  dl { margin: 0; }
+  dt { font-weight: 650; margin-top: 22px; }
+  dt:first-child { margin-top: 0; }
+  dd { margin: 6px 0 0; color: var(--muted); }
+
+  footer { border-top: 1px solid var(--line); padding: 34px 0 48px; color: var(--muted); font-size: 14px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav aria-label="Main">
+    <a class="brand" href="/"><img src="/icon-192.png" width="30" height="30" alt="">Simic</a>
+    <ul>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="https://github.com/JaimeAlonsoGA/simic-monorepo">GitHub</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <img src="/icon-512.png" width="132" height="132" alt="Simic icon: two glowing eyes, one violet, one teal">
+      <h1>Every meeting, <span class="accent">written down</span>. On your machine.</h1>
+      <p class="lede">Simic records any call on Linux, transcribes it locally with Whisper and leaves a Markdown note in your Obsidian vault. No bot in the meeting, no account, no upload.</p>
+      <div class="install" role="group" aria-label="Install command">
+        <span class="prompt" aria-hidden="true">$</span>
+        <code>uv tool install --python 3.13 git+https://github.com/JaimeAlonsoGA/simic-monorepo</code>
+      </div>
+      <div class="cta">
+        <a class="btn primary" href="#install">Get started</a>
+        <a class="btn" href="https://github.com/JaimeAlonsoGA/simic-monorepo">View on GitHub</a>
+      </div>
+      <p class="apps">Works with Google Meet · Zoom · Microsoft Teams · Telegram · Discord · Slack · any app that makes a sound</p>
+    </header>
+
+    <section id="features" aria-labelledby="features-h">
+      <h2 id="features-h">A meeting recorder that stays out of the way</h2>
+      <p class="sub">Free and open source, built for hour-long calls on a Linux desktop.</p>
+      <div class="grid">
+        <article class="card"><h3><span class="dot"></span>Private by default</h3><p>faster-whisper transcribes on your CPU or GPU. Nothing leaves the machine unless you opt into a remote provider.</p></article>
+        <article class="card"><h3><span class="dot"></span>Any call app</h3><p>It records what your computer plays and what your mic hears through PipeWire or PulseAudio, so it works with any app.</p></article>
+        <article class="card"><h3><span class="dot"></span>Obsidian-native notes</h3><p>Markdown with YAML frontmatter, timestamps and speakers, dropped straight into your vault.</p></article>
+        <article class="card"><h3><span class="dot"></span>You and them, apart</h3><p>Your mic and the other side are recorded on separate channels, so what is labelled “You” is really you.</p></article>
+        <article class="card"><h3><span class="dot"></span>Nothing lost</h3><p>A crash, a Ctrl+C or a failed run keeps the recording until there is a note. <code>simic recover</code> finishes it.</p></article>
+        <article class="card"><h3><span class="dot"></span>Summaries, if you want them</h3><p>Optional LLM summaries and action items: Anthropic, OpenAI, Groq, Gemini, DeepSeek, OpenRouter or Qwen. Emails, phone numbers and names you list can be masked before it is sent.</p></article>
+        <article class="card"><h3><span class="dot"></span>Who said what</h3><p>Optional speaker diarization with pyannote names each voice in group calls.</p></article>
+        <article class="card"><h3><span class="dot"></span>Terminal, window or tray</h3><p><code>simic start</code> in a terminal, a GTK window, or a tray icon that shows when it is recording.</p></article>
+      </div>
+    </section>
+
+    <section id="how" aria-labelledby="how-h">
+      <h2 id="how-h">How it works</h2>
+      <p class="sub">Three steps, and the last one happens without you.</p>
+      <div class="two">
+        <ol class="steps">
+          <li><div><strong>Press record when the call starts.</strong><p>Click the button in the window or tray, or run <code>simic start</code>.</p></div></li>
+          <li><div><strong>Stop when it ends.</strong><p>Your terminal comes back at once. Light MP3 capture, about 60 MB an hour.</p></div></li>
+          <li><div><strong>Read the note.</strong><p>Simic transcribes it in the background, and a desktop notification tells you when it is in your vault.</p></div></li>
+        </ol>
+<pre aria-label="Example of a meeting note"><span class="k">---</span>
+date: 2026-10-20
+time: "10:30"
+duration: "00:47:12"
+language: en
+tags:
+  - meeting
+  - transcript
+<span class="k">---</span>
+
+<span class="h"># Meeting 2026-10-20 10:30</span>
+
+<span class="s">[00:00:04] **You:**</span> Let's start with
+the launch date.
+
+<span class="s">[00:00:09] **Other:**</span> QA signed off
+yesterday, so Thursday works.</pre>
+      </div>
+    </section>
+
+    <section id="install" aria-labelledby="install-h">
+      <h2 id="install-h">Install</h2>
+      <p class="sub">Linux with PipeWire or PulseAudio, Python 3.13 or newer, and ffmpeg.</p>
+<pre><span class="k"># 1. System dependencies (Debian / Ubuntu shown)</span>
+sudo apt install ffmpeg pulseaudio-utils
+
+<span class="k"># 2. Simic, with uv</span>
+uv tool install --python 3.13 git+https://github.com/JaimeAlonsoGA/simic-monorepo
+
+<span class="k"># 3. Check and record</span>
+simic doctor        <span class="k"># is everything a meeting needs in place?</span>
+simic start         <span class="k"># Ctrl+C to stop</span></pre>
+      <p>Notes go to <code>~/simic/meetings/</code>. To use your Obsidian vault instead, set <code>SIMIC_VAULT_PATH</code> in <code>~/.config/simic/.env</code>. Nix users can run <code>nix run github:JaimeAlonsoGA/simic-monorepo</code>. Extras such as the tray, summaries and diarization are covered in the <a href="https://github.com/JaimeAlonsoGA/simic-monorepo#readme">README</a>.</p>
+    </section>
+
+    <section id="faq" aria-labelledby="faq-h">
+      <h2 id="faq-h">Questions</h2>
+      <dl>
+        <dt>Does Simic send my meetings to the cloud?</dt>
+        <dd>No. Whisper transcribes on your own machine. Audio leaves it only if you opt into remote transcription (OpenAI), and text only if you turn on an LLM summary; emails, phone numbers and names you list can be masked first.</dd>
+        <dt>Which call apps does Simic work with?</dt>
+        <dd>Any of them. Simic records at the system level, so Google Meet, Zoom, Microsoft Teams, Telegram, Discord, Slack huddles and browser calls all work. No bot joins the call.</dd>
+        <dt>Do I need Obsidian?</dt>
+        <dd>No. Simic writes plain Markdown files to <code>~/simic/meetings</code> by default. Point <code>SIMIC_VAULT_PATH</code> at an Obsidian vault and the notes appear there.</dd>
+        <dt>Does it need a GPU?</dt>
+        <dd>No. faster-whisper runs on the CPU by default. An NVIDIA GPU with CUDA makes transcription and speaker diarization much faster.</dd>
+        <dt>What happens if my computer crashes during a meeting?</dt>
+        <dd>The recording is kept until a note exists. <code>simic status</code> lists what is pending and <code>simic recover</code> finishes it.</dd>
+        <dt>Is Simic free?</dt>
+        <dd>Yes. Simic is open source under the <a href="https://github.com/JaimeAlonsoGA/simic-monorepo/blob/main/LICENSE">Apache 2.0 license</a>.</dd>
+      </dl>
+    </section>
+  </main>
+
+  <footer>
+    <span>Simic — Super Intelligent Mic. Apache-2.0.</span>
+    <span><a href="https://github.com/JaimeAlonsoGA/simic-monorepo">GitHub</a> · <a href="/llms.txt">llms.txt</a> · by <a href="https://jaimealonso.dev">Jaime Alonso</a></span>
+  </footer>
+</div>
+</body>
+</html>
