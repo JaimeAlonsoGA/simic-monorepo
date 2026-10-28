@@ -40,6 +40,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The tray runs on [dbus-fast](https://github.com/bluetooth-devices/dbus-fast), the maintained fork of dbus-next: dbus-next 0.2.3, its last release, no longer imports on Python 3.15. The tray packages swap it on upgrade, and the `.deb` and Arch stands now install the tray and check it and the icon.
 
 ### Fixed
+- **A call on the speakers is no longer transcribed twice.** The mic heard the other side from the speakers, and the note repeated what they said under "You" a second or two later — 77 % of it in one 84-minute meeting. The mic is now recorded through PipeWire's WebRTC echo canceller (`SIMIC_ECHO_CANCEL`, on): measured on a laptop's speakers, the echo 35 dB lower. What gets through is taken out of the transcript: a run of four or more words on your channel that repeats the other side's within three seconds. `simic start` says whether the canceller is on, warns when the mic still follows the speakers, and `simic doctor` checks it.
 - **`simic tray` no longer tells GNOME users with the AppIndicator extension enabled to install it.** The hint was guessed from the desktop on every start; it now follows a failed registration with the tray host, and only then.
 - **An interrupted first model download no longer breaks every run after it.** A download cut short left the model without `model.bin`; the cache lookup accepted it, and each run failed with `Unable to open file 'model.bin'` until the cache was deleted by hand. simic now downloads what is missing.
 - **Ctrl+C no longer loses the meeting.** A terminal sends Ctrl+C to its whole foreground process group, so the recorders died with the keystroke; `simic start` took that for a `simic stop` from another terminal and exited 0 — no note, no message, the audio orphaned. The recorders now run in a session of their own, and simic stops them itself, recorder before encoder.
@@ -48,6 +49,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Live transcription at 16 kHz.** Chunks were decimated as if captured at 48 kHz, so Whisper heard a third of each one. Live mode now requires a sample rate that is a multiple of 16000.
 - **A transcription worker killed for lack of memory says so**, instead of `exited with code -9`.
 - **A meeting already being transcribed is no longer announced as failed** when a second `simic recover` reaches it.
+- **`simic start` no longer warns that nothing is being written to a healthy recording.** ffmpeg held the first tens of seconds of each MP3 channel in its buffer, so the files sat at 0 bytes: the stall warning fired, and the live checks that read the end of each file had nothing to read. Each frame is now written as it is encoded.
 
 ### Docs
 - `docs/spec/BACKLOG.md` records the first CPU benchmark (threads, beam, batching, parallel channels) and how to repeat it on the recording machine.

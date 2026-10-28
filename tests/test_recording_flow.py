@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from simic._watch import CaptureWatch, SilenceWatch
+from simic._watch import CaptureWatch, EchoWatch, SilenceWatch
 from simic.cli import cli
 from simic.recorder import processing
 from tests.fixtures import mock_whisper_by_channel, process_state
@@ -281,3 +281,83 @@ def test_start_warns_when_the_other_side_is_silent(runner, vault_env, fake_parec
 
     assert result.exit_code == 0, result.output + repr(result.exception)
     assert result.stderr.count("Warning: no sound from the other side for 0 min.") == 1
+
+
+@pytest.mark.usefixtures("ctrl_c_while_recording")
+def test_start_warns_when_the_mic_hears_the_speakers(runner, vault_env, fake_parecord, monkeypatch):
+    """The Ctrl+C comes after one look, so one check is made to be enough here; the
+    two-in-a-row rule has its own tests in test_watch.py."""
+    monkeypatch.setattr("simic._watch.ECHO_CONFIRM_CHECKS", 1)
+    monkeypatch.setattr(
+        "simic.cli.EchoWatch",
+        lambda mic, monitor: EchoWatch(mic, monitor, measure=lambda _m, _o: 0.84, check_every=0.0),
+    )
+
+    with patch("simic.transcriber.WhisperModel", return_value=_meeting()):
+        result = runner.invoke(cli, START)
+
+    assert result.exit_code == 0, result.output + repr(result.exception)
+    assert (
+        result.stderr.count(
+            "Warning: your mic is picking up the other side from the speakers, so the note would "
+            "repeat what they say as yours. Use headphones, or turn the speakers down."
+        )
+        == 1
+    )
+
+
+# --- the mic through PipeWire's echo canceller --------------------------------------
+
+
+@pytest.mark.usefixtures("ctrl_c_while_recording")
+def test_the_mic_is_recorded_through_the_echo_canceller_and_it_goes_with_the_recording(
+    runner, vault_env, fake_parecord, fake_pw_cli
+):
+    with patch("simic.transcriber.WhisperModel", return_value=_meeting()):
+        result = runner.invoke(cli, START)
+
+    assert result.exit_code == 0, result.output + repr(result.exception)
+    assert "Echo cancellation: on\n" in result.output
+    # The mic is read from the canceller's source; the monitor as before.
+    assert sorted(call.device for call in fake_parecord()) == ["fake.monitor", "simic.echo-cancel"]
+    # The canceller lived exactly as long as the recording: stopped with it, and gone.
+    [canceller] = fake_pw_cli()
+    assert canceller.stopped_by == "TERM"
+    assert process_state(canceller.pid) is None
+    note = (vault_env / "meetings" / f"{SESSION}.md").read_text()
+    assert note.endswith(
+        "[00:00:00] **You:** I will send the report.\n\n"
+        "[00:00:02] **Other:** Thanks, see you Friday.\n"
+    )
+
+
+@pytest.mark.usefixtures("ctrl_c_while_recording")
+def test_without_a_canceller_the_plain_mic_is_recorded_and_the_user_told(
+    runner, vault_env, fake_parecord
+):
+    """isolate_pipewire's pw-cli: PipeWire without the WebRTC plugin."""
+    with patch("simic.transcriber.WhisperModel", return_value=_meeting()):
+        result = runner.invoke(cli, START)
+
+    assert result.exit_code == 0, result.output + repr(result.exception)
+    assert (
+        "Warning: echo cancellation unavailable — PipeWire's echo-cancel module did not load "
+        "(is the WebRTC AEC plugin installed?). On speakers, the mic will also record the "
+        "other side: use headphones.\n"
+    ) in result.output
+    assert sorted(call.device for call in fake_parecord()) == ["fake.mic", "fake.monitor"]
+    assert (vault_env / "meetings" / f"{SESSION}.md").exists()
+
+
+@pytest.mark.usefixtures("ctrl_c_while_recording")
+def test_echo_cancellation_turned_off_records_the_plain_mic(
+    runner, vault_env, fake_parecord, fake_pw_cli, monkeypatch
+):
+    monkeypatch.setenv("SIMIC_ECHO_CANCEL", "false")
+    with patch("simic.transcriber.WhisperModel", return_value=_meeting()):
+        result = runner.invoke(cli, START)
+
+    assert result.exit_code == 0, result.output + repr(result.exception)
+    assert "Echo cancellation: off (SIMIC_ECHO_CANCEL)\n" in result.output
+    assert fake_pw_cli() == []
+    assert sorted(call.device for call in fake_parecord()) == ["fake.mic", "fake.monitor"]

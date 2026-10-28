@@ -20,7 +20,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import click
+import numpy as np
 
+from simic import const
+from simic._bleed import ECHO_CORRELATION, echo_correlation
 from simic._timing import format_clock
 
 if TYPE_CHECKING:
@@ -174,20 +177,116 @@ class SilenceWatch:
         }
 
 
+# --- the mic hearing the speakers -----------------------------------------------------
+#
+# Without headphones the mic records the other side from the speakers, and the note
+# repeats everything they say under "You". The echo canceller (_aec) prevents it where
+# PipeWire has one; where it has not, or cannot keep up, the person running the meeting
+# is the one who can fix it — with headphones — and only while it is still going. Each
+# check compares the end of both channels (_bleed.echo_correlation); ECHO_CONFIRM_CHECKS
+# in a row are reported, so one burst of crosstalk is not.
+
+ECHO_CONFIRM_CHECKS = 2
+
+
+def tail_samples(path: Path, window: float) -> np.ndarray | None:
+    """The last `window` seconds of `path` as 16 kHz mono int16, or None when they
+    cannot be decoded yet."""
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-sseof",
+                f"-{window:.0f}",
+                "-i",
+                str(path),
+                "-f",
+                "s16le",
+                "-ac",
+                "1",
+                "-ar",
+                str(const.SAMPLE_RATE_16K),
+                "pipe:1",
+            ],
+            capture_output=True,
+            check=False,
+            timeout=window,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0 or not result.stdout:
+        return None
+    return np.frombuffer(result.stdout[: len(result.stdout) // 2 * 2], dtype=np.int16)
+
+
+def echo_in_tail(mic: Path, monitor: Path) -> float | None:
+    """How closely the end of the mic follows the end of the monitor; None when there
+    is not enough of both, or of the other side speaking, to tell."""
+    heard, played = (
+        tail_samples(mic, LEVEL_WINDOW_SECONDS),
+        tail_samples(monitor, LEVEL_WINDOW_SECONDS),
+    )
+    if heard is None or played is None:
+        return None
+    return echo_correlation(heard, played, const.SAMPLE_RATE_16K)
+
+
+class EchoWatch:
+    def __init__(
+        self,
+        mic: Path,
+        monitor: Path,
+        measure: Callable[[Path, Path], float | None] = echo_in_tail,
+        clock: Callable[[], float] = time.monotonic,
+        check_every: float = LEVEL_CHECK_SECONDS,
+    ) -> None:
+        self._mic = mic
+        self._monitor = monitor
+        self._measure = measure
+        self._clock = clock
+        self._check_every = check_every
+        self._last_check = clock()
+        self._streak = 0
+
+    def poll(self) -> bool:
+        """Whether the mic has been hearing the speakers for ECHO_CONFIRM_CHECKS checks."""
+        now = self._clock()
+        if now - self._last_check >= self._check_every:
+            self._last_check = now
+            correlation = self._measure(self._mic, self._monitor)
+            if correlation is not None:
+                self._streak = self._streak + 1 if correlation >= ECHO_CORRELATION else 0
+        return self._streak >= ECHO_CONFIRM_CHECKS
+
+
 # --- the loop `simic start` waits in ---------------------------------------------
 
 
-def wait_while_recording(recorder: Recorder, watch: CaptureWatch, silence: SilenceWatch) -> None:
+def wait_while_recording(
+    recorder: Recorder, watch: CaptureWatch, silence: SilenceWatch, echo: EchoWatch
+) -> None:
     """Block until the recording ends, showing it on a terminal as it goes.
 
     A status line rewritten in place when stderr is a terminal; a warning, on any
     output, when a channel stops being written or the other side goes silent — and a
-    line when it comes back.
+    line when it comes back — and once when the mic hears the speakers.
     """
     status_line = sys.stderr.isatty()
     warned: set[str] = set()
     quiet = False
+    echo_warned = False
     while recorder.is_recording():
+        if not echo_warned and echo.poll():
+            echo_warned = True
+            click.echo(
+                "\nWarning: your mic is picking up the other side from the speakers, so "
+                "the note would repeat what they say as yours. Use headphones, or turn "
+                "the speakers down.",
+                err=True,
+            )
         silent = silence.poll()
         if silent and not quiet:
             quiet = True

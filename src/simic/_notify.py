@@ -14,10 +14,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from simic import const
 from simic.settings import Settings
 
 # A notification daemon that does not answer must not hold up the end of a run.
 NOTIFY_TIMEOUT_SECONDS = 5.0
+# By path, not by name: the name resolves only once `simic ui --install` has put the
+# icon in the user's theme, and most people never run it.
+_ICON = const.ICON_THEME_DIR / "hicolor" / "256x256" / "apps" / f"{const.APP_ID}.png"
 
 
 def notify(settings: Settings, title: str, body: str) -> None:
@@ -25,7 +29,7 @@ def notify(settings: Settings, title: str, body: str) -> None:
         return
     with contextlib.suppress(subprocess.TimeoutExpired):
         subprocess.run(
-            ["notify-send", "--app-name=simic", title, body],
+            ["notify-send", f"--app-name={const.APP_NAME}", f"--icon={_ICON}", title, body],
             capture_output=True,
             check=False,
             timeout=NOTIFY_TIMEOUT_SECONDS,

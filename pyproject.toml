@@ -48,7 +48,7 @@ llm = [
     "openai>=1.50.0,<3",
 ]
 tray = [
-    "dbus-next>=0.2.3,<1",
+    "dbus-fast>=5.2,<6",
 ]
 
 [project.scripts]
@@ -78,7 +78,7 @@ dev = [
     "torchaudio>=2.0.0",
     "anthropic>=0.40.0",
     "openai>=1.50.0",
-    "dbus-next>=0.2.3",
+    "dbus-fast>=5.2",
 ]
 
 [tool.ruff]
@@ -105,7 +105,7 @@ max-args = 6  # Settings + 5 domain args is a common shape in this codebase
 # Lazy imports to keep CLI startup (--help, status) free of ~10s ML model load
 # (faster_whisper/torch are pulled in transitively from pipeline/live/tray).
 "src/simic/cli.py" = ["PLC0415"]
-# GTK and dbus-next are optional: imported only when `simic ui` / `tray` runs.
+# GTK and dbus-fast are optional: imported only when `simic ui` / `tray` runs.
 "src/simic/_cli_gui.py" = ["PLC0415"]
 # pyannote.audio + torch are `[diarize]` extras — must import inside functions
 # so users without the extra don't get ImportError on module load.
@@ -114,7 +114,7 @@ max-args = 6  # Settings + 5 domain args is a common shape in this codebase
 "src/simic/summarizer.py" = ["PLC0415"]
 "src/simic/_stt_openai.py" = ["PLC0415"]
 # D-Bus method/signal signatures live in string annotations (e.g. `-> "u(ia{sv}av)"`)
-# that dbus-next reads at runtime. ruff F821/F722 cannot tell these strings apart
+# that dbus-fast reads at runtime. ruff F821/F722 cannot tell these strings apart
 # from broken forward refs, so we silence them in the SNI/DBusMenu modules.
 "src/simic/_sni.py" = ["F821", "F722"]
 "src/simic/_dbusmenu.py" = ["F821", "F722"]

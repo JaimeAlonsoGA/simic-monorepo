@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import NotRequired, TypedDict
 from zoneinfo import ZoneInfo
 
-from simic import _capture, const
+from simic import _aec, _capture, const
 from simic.settings import Settings
 
 
@@ -35,11 +35,17 @@ class SessionData(TypedDict):
     # ffmpeg pids when audio_format is mp3. Absent for a WAV capture.
     pid_monitor_encode: NotRequired[int]
     pid_mic_encode: NotRequired[int]
+    # The pw-cli holding the echo canceller the mic is recorded through (_aec).
+    pid_echo_cancel: NotRequired[int]
+    # Why the mic is recorded without echo cancellation, when it was asked for.
+    echo_cancel_unavailable: NotRequired[str]
 
 
 _SESSION_NAME_RE = re.compile(r"^[\w-]+$")
 
 _SESSIONS_DIR_NAME = "sessions"
+# What the echo canceller's pw-cli printed, kept beside the recording.
+FILE_ECHO_CANCEL_LOG = "echo-cancel.log"
 
 
 def _state_dir() -> Path:
@@ -244,7 +250,12 @@ def _channel_pids(session: SessionData) -> dict[str, list[int]]:
     when the format is compressed."""
     pids = {
         const.CHANNEL_MONITOR: [session["pid_monitor"], session.get("pid_monitor_encode")],
-        const.CHANNEL_MIC: [session["pid_mic"], session.get("pid_mic_encode")],
+        # Without its canceller the mic records nothing, so it counts as the mic's.
+        const.CHANNEL_MIC: [
+            session["pid_mic"],
+            session.get("pid_mic_encode"),
+            session.get("pid_echo_cancel"),
+        ],
     }
     return {channel: [pid for pid in found if pid is not None] for channel, found in pids.items()}
 
@@ -370,8 +381,16 @@ class Recorder:
         monitor_path = tmp_dir / f"{const.CHANNEL_MONITOR}.{settings.audio_format}"
         mic_path = tmp_dir / f"{const.CHANNEL_MIC}.{settings.audio_format}"
 
+        canceller, unavailable = None, ""
+        if settings.echo_cancel:
+            try:
+                log = tmp_dir / FILE_ECHO_CANCEL_LOG
+                canceller = _aec.start(mic_source, monitor_source, log)
+            except _aec.EchoCancelUnavailable as exc:
+                unavailable = str(exc)
         monitor_rec, monitor_enc = _capture.spawn(monitor_source, monitor_path, settings, tmp_dir)
-        mic_rec, mic_enc = _capture.spawn(mic_source, mic_path, settings, tmp_dir)
+        mic_device = canceller.source if canceller else mic_source
+        mic_rec, mic_enc = _capture.spawn(mic_device, mic_path, settings, tmp_dir)
 
         self._state_dir.mkdir(parents=True, exist_ok=True)
         session_data: SessionData = {
@@ -385,6 +404,10 @@ class Recorder:
         if monitor_enc is not None and mic_enc is not None:
             session_data["pid_monitor_encode"] = monitor_enc
             session_data["pid_mic_encode"] = mic_enc
+        if canceller:
+            session_data["pid_echo_cancel"] = canceller.pid
+        if unavailable:
+            session_data["echo_cancel_unavailable"] = unavailable
         self._session_file.write_text(json.dumps(session_data, indent=2))
 
         return session_name
@@ -414,6 +437,10 @@ class Recorder:
         _capture.wait_and_kill(recorders, _capture.RECORDER_STOP_SECONDS)
         if encoders:
             _capture.wait_and_kill(encoders, _capture.ENCODER_FLUSH_SECONDS)
+        # Last: the mic recorder reads from it until it has stopped.
+        if "pid_echo_cancel" in session:
+            _capture.terminate(session["pid_echo_cancel"])
+            _capture.wait_and_kill([session["pid_echo_cancel"]], _capture.RECORDER_STOP_SECONDS)
 
         return Path(session["monitor_path"]), Path(session["mic_path"])
 

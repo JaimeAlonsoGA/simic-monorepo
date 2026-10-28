@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from simic.live import LiveTranscriber
 
 from simic import const
+from simic._bleed import drop_echoed_words
 from simic._gpu import free_gpu_memory, sample_gpu, telemetry_enabled
 from simic._lazy import load_transcriber
 from simic._mono import process_mono_file
@@ -307,6 +308,9 @@ def process_stereo_file(
         # the diarizer that runs next.
         del transcriber
         free_gpu_memory()
+
+    # The other side heard through the speakers, transcribed again from the mic.
+    mic_segments = drop_echoed_words(mic_segments, monitor_segments)
 
     mic_segments = split_on_silence(
         mic_segments,

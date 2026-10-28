@@ -1,5 +1,7 @@
 """Shared constants — values used across multiple modules."""
 
+from pathlib import Path
+
 # Speaker labels
 SPEAKER_YOU = "You"
 SPEAKER_OTHER = "Other"
@@ -25,6 +27,11 @@ FILE_PROCESSING_LOG = "processing.log"
 # The desktop app's id: the window registers under it, and its launcher is named after
 # it, which is how the desktop matches the two.
 APP_ID = "io.github.jaimealonsoga.simic"
+# The name a person sees: window title, applications menu, tray. The command, the
+# package and every path stay lowercase `simic`.
+APP_NAME = "Simic"
+# The app icon, a hicolor theme of its own named after APP_ID, shipped in the package.
+ICON_THEME_DIR = Path(__file__).parent / "icons"
 
 # Where in-progress recordings live is not a constant: it depends on settings and
 # XDG_STATE_HOME, and is verified to be private before use. See recorder.session_root().

@@ -10,9 +10,9 @@ Spec: https://github.com/AyatanaIndicators/libdbusmenu/blob/master/libdbusmenu-g
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from dbus_next import Variant
-from dbus_next.constants import PropertyAccess
-from dbus_next.service import ServiceInterface, dbus_property, method, signal
+from dbus_fast import Variant
+from dbus_fast.constants import PropertyAccess
+from dbus_fast.service import ServiceInterface, dbus_property, method, signal
 
 DBUSMENU_INTERFACE = "com.canonical.dbusmenu"
 MENU_OBJECT_PATH = "/MenuBar"
@@ -55,7 +55,7 @@ def _item_properties(item: MenuItem, requested: list[str]) -> dict[str, Variant]
 def build_layout(items: list[MenuItem], property_names: list[str]) -> list:
     """Build the (id, props, children) tuple the host expects from GetLayout.
 
-    Returned as a Python list (dbus-next marshals it to the struct signature).
+    Returned as a Python list (dbus-fast marshals it to the struct signature).
     Pure function — extracted for testability without a D-Bus connection.
     """
     children = []

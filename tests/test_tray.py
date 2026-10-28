@@ -3,10 +3,11 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from tests.fixtures import requires_dbus_next
+from tests.fixtures import requires_dbus
 
-pytestmark = requires_dbus_next
+pytestmark = requires_dbus
 
+import simic  # noqa: E402
 from simic.tray import TrayState, build_menu_items  # noqa: E402
 
 # --- Menu layout (pure function) ---
@@ -216,3 +217,14 @@ def test_update_state_sets_icon_tooltip_and_refreshes_menu(tray_app):
     tray_app._sni.set_icon.assert_called_once_with("media-record-symbolic")
     tray_app._sni.set_tooltip.assert_called_once()
     tray_app._menu.replace_items.assert_called_once()
+
+
+def test_idle_shows_the_app_icon_shipped_in_the_package(tray_app):
+    """The idle icon is no system theme's: the host finds it through IconThemePath,
+    which the tray points at the package's own hicolor theme."""
+    tray_app._update_state(TrayState.IDLE)
+
+    tray_app._sni.set_icon.assert_called_once_with("io.github.jaimealonsoga.simic")
+    tray_app._sni.set_tooltip.assert_called_once_with("Simic", "Idle")
+    shipped = Path(simic.__file__).parent / "icons" / "hicolor" / "48x48" / "apps"
+    assert (shipped / "io.github.jaimealonsoga.simic.png").is_file()

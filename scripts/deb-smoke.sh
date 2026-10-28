@@ -28,5 +28,10 @@ for image in "${SMOKE_IMAGES[@]}"; do
     simic --version
     simic status
     /smoke/transcribe.sh
+    # Without the recommended GNOME extension: it pulls in a desktop, and tzdata with
+    # it, whose prompt for a timezone hung the stand.
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+      /dist/simic-tray_*.deb >/dev/null
+    /smoke/desktop.sh /opt/simic/venv/bin/python
   '
 done

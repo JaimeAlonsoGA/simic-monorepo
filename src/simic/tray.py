@@ -1,4 +1,4 @@
-"""System tray icon for simic — pure-Python SNI implementation."""
+"""System tray icon for Simic — pure-Python SNI implementation."""
 
 import asyncio
 import logging
@@ -6,9 +6,10 @@ import threading
 from collections.abc import Callable
 from enum import Enum, auto
 
-from dbus_next import BusType
-from dbus_next.aio import MessageBus
+from dbus_fast import BusType
+from dbus_fast.aio import MessageBus
 
+from simic import const
 from simic._dbusmenu import MENU_OBJECT_PATH, DBusMenu, MenuItem
 from simic._sni import SNI_OBJECT_PATH, StatusNotifierItem, register_with_watcher
 from simic._tray_env import TrayEnv, detect_tray_env
@@ -25,9 +26,10 @@ class TrayState(Enum):
     PROCESSING = auto()
 
 
-# Freedesktop-standard theme icon names — present on every modern icon theme.
+# Idle shows the app's own icon, found through the SNI's IconThemePath. Recording and
+# processing use freedesktop-standard names, present on every modern icon theme.
 _STATE_ICONS: dict[TrayState, str] = {
-    TrayState.IDLE: "audio-input-microphone-symbolic",
+    TrayState.IDLE: const.APP_ID,
     TrayState.RECORDING: "media-record-symbolic",
     TrayState.PROCESSING: "process-working-symbolic",
 }
@@ -102,11 +104,12 @@ class TrayApp:
         self._menu = DBusMenu(self._current_menu_items())
         self._sni = StatusNotifierItem(
             app_id="simic",
-            title="simic",
+            title=const.APP_NAME,
             menu_path=MENU_OBJECT_PATH,
+            icon_theme_path=str(const.ICON_THEME_DIR),
         )
         self._sni.set_icon(_STATE_ICONS[self._state])
-        self._sni.set_tooltip("simic", self._tooltip_text())
+        self._sni.set_tooltip(const.APP_NAME, self._tooltip_text())
         self._sni.set_callbacks(on_activate=self._on_activate)
 
         self._bus = await MessageBus(bus_type=BusType.SESSION).connect()
@@ -121,12 +124,11 @@ class TrayApp:
         try:
             await register_with_watcher(self._bus, unique_name)
             logger.info("Tray registered with StatusNotifierWatcher")
-        except Exception:
-            logger.exception("Failed to register with StatusNotifierWatcher")
-            logger.warning(
-                "Tray will not appear. On GNOME install "
-                "gnome-shell-extension-appindicator and re-login."
-            )
+        except Exception as exc:
+            # No watcher on the bus is the one case a person can fix — on GNOME, by
+            # enabling the AppIndicator extension — so it gets the steps, not a trace.
+            logger.debug("Registering with StatusNotifierWatcher failed", exc_info=True)
+            _warn_tray_host_missing(detect_tray_env(), exc)
 
         await self._stopped.wait()
         self._bus.disconnect()
@@ -156,7 +158,7 @@ class TrayApp:
         self._state = new_state
         if self._sni is not None:
             self._sni.set_icon(_STATE_ICONS[new_state])
-            self._sni.set_tooltip("simic", self._tooltip_text())
+            self._sni.set_tooltip(const.APP_NAME, self._tooltip_text())
         if self._menu is not None:
             self._menu.replace_items(self._current_menu_items())
 
@@ -240,14 +242,17 @@ class TrayApp:
             self._loop.call_soon_threadsafe(self._stopped.set)
 
 
-def _warn_if_tray_host_missing(env: TrayEnv) -> None:
-    """Emit the AppIndicator hint exactly once via the logger.
+def _warn_tray_host_missing(env: TrayEnv, error: BaseException) -> None:
+    """Say once, through the logger alone, that no tray host took the icon.
 
-    Extracted so that v0.9.5 doesn't double-print like v0.9.4 did (both
-    `print(...)` and `logger.warning(...)` ended up in user logs).
+    Only after registering failed: the desktop alone does not tell whether a host is
+    there, and guessing from it told every GNOME user with the extension enabled to
+    install it. v0.9.4 also printed the message beside logging it, doubling it.
     """
     if env.needs_appindicator_hint:
         logger.warning("%s", env.hint_message)
+    else:
+        logger.warning("No tray host on the session bus (%s): the icon will not appear.", error)
 
 
 def run_tray() -> None:
@@ -257,5 +262,4 @@ def run_tray() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
     settings = get_settings()
-    _warn_if_tray_host_missing(detect_tray_env())
     TrayApp(settings).run()

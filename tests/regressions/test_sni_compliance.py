@@ -15,15 +15,15 @@ These tests lock in the fixes so the same regressions can't return.
 
 import logging
 
-from dbus_next.service import ServiceInterface
+from dbus_fast.service import ServiceInterface
 
-from tests.fixtures import requires_dbus_next
+from tests.fixtures import requires_dbus
 
-pytestmark = requires_dbus_next
+pytestmark = requires_dbus
 
 from simic._sni import StatusNotifierItem  # noqa: E402
 from simic._tray_env import detect_tray_env  # noqa: E402
-from simic.tray import _warn_if_tray_host_missing  # noqa: E402
+from simic.tray import _warn_tray_host_missing  # noqa: E402
 
 
 def _properties_by_name(iface: ServiceInterface) -> dict:
@@ -66,18 +66,21 @@ def test_warn_emits_single_logger_record_no_stderr_print(caplog, capsys):
     """
     env = detect_tray_env({"XDG_SESSION_TYPE": "wayland", "XDG_CURRENT_DESKTOP": "GNOME"})
     with caplog.at_level(logging.WARNING, logger="simic.tray"):
-        _warn_if_tray_host_missing(env)
+        _warn_tray_host_missing(env, RuntimeError("ServiceUnknown"))
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1
     captured = capsys.readouterr()
     assert captured.err == ""
 
 
-def test_warn_skipped_when_hint_not_needed(caplog):
-    env = detect_tray_env({"XDG_SESSION_TYPE": "x11", "XDG_CURRENT_DESKTOP": "GNOME"})
+def test_outside_gnome_the_warning_names_the_bus_error(caplog):
+    """No AppIndicator steps where they do not apply; what the bus said instead."""
+    env = detect_tray_env({"XDG_SESSION_TYPE": "x11", "XDG_CURRENT_DESKTOP": "KDE"})
     with caplog.at_level(logging.WARNING, logger="simic.tray"):
-        _warn_if_tray_host_missing(env)
-    assert not caplog.records
+        _warn_tray_host_missing(env, RuntimeError("ServiceUnknown"))
+    assert [r.getMessage() for r in caplog.records] == [
+        "No tray host on the session bus (ServiceUnknown): the icon will not appear."
+    ]
 
 
 def test_hint_message_is_distro_neutral():

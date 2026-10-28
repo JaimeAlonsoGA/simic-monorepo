@@ -252,7 +252,7 @@ class Window(Adw.ApplicationWindow):
     def __init__(self, app: Adw.Application) -> None:
         super().__init__(
             application=app,
-            title="simic",
+            title=const.APP_NAME,
             default_width=WINDOW_SIZE,
             default_height=WINDOW_SIZE,
         )
@@ -357,6 +357,10 @@ class App(Adw.Application):
                 Gtk.StyleContext.add_provider_for_display(
                     display, css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
                 )
+                # The icon ships in the package, so the window has it before
+                # `simic ui --install` puts a copy in the user's theme.
+                Gtk.IconTheme.get_for_display(display).add_search_path(str(const.ICON_THEME_DIR))
+            Gtk.Window.set_default_icon_name(const.APP_ID)
             window = Window(self)
         window.present()
 

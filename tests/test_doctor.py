@@ -96,6 +96,44 @@ def test_sources_not_found(tmp_vault):
         assert _doctor._sources(Settings(vault_path=tmp_vault)).outcome == "fail"
 
 
+def test_echo_cancellation_loads_and_is_let_go(tmp_vault, fake_pw_cli):
+    check = _doctor._echo_cancel(Settings(vault_path=tmp_vault))
+
+    assert (check.outcome, check.detail) == ("ok", "PipeWire WebRTC canceller on the mic")
+    [canceller] = fake_pw_cli()
+    assert canceller.stopped_by == "TERM"
+
+
+def test_echo_cancellation_that_does_not_load_is_a_warning(tmp_vault, fake_parecord):
+    """isolate_pipewire's pw-cli: PipeWire without the WebRTC plugin."""
+    check = _doctor._echo_cancel(Settings(vault_path=tmp_vault))
+
+    assert (check.outcome, check.detail) == (
+        "warn",
+        "PipeWire's echo-cancel module did not load (is the WebRTC AEC plugin installed?)"
+        " — on speakers, use headphones",
+    )
+
+
+def test_echo_cancellation_turned_off(tmp_vault):
+    check = _doctor._echo_cancel(Settings(vault_path=tmp_vault, echo_cancel=False))
+
+    assert (check.outcome, check.detail) == (
+        "ok",
+        "off — on speakers the mic records the call too",
+    )
+
+
+def test_echo_cancellation_without_sources_is_a_warning(tmp_vault):
+    with patch(
+        "simic._doctor.detect_devices",
+        side_effect=subprocess.CalledProcessError(1, ["pactl"]),
+    ):
+        check = _doctor._echo_cancel(Settings(vault_path=tmp_vault))
+
+    assert check.outcome == "warn"
+
+
 # --- vault and disk ---
 
 

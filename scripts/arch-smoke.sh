@@ -37,3 +37,11 @@ sudo -u builder makepkg -si --noconfirm
 simic --version
 simic status
 /src/tests/smoke/transcribe.sh
+
+# The tray package: a meta-package whose install hook pip-installs into /opt/simic.
+tray=/home/builder/tray
+install -d "$tray"
+cp /src/packaging/simic-tray/PKGBUILD /src/packaging/simic-tray/simic-tray.install "$tray/"
+chown -R builder "$tray"
+(cd "$tray" && sudo -u builder makepkg -si --noconfirm)
+/src/tests/smoke/desktop.sh /opt/simic/bin/python

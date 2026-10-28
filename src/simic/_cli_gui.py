@@ -1,6 +1,6 @@
 """The graphical commands, `simic ui` and `simic tray`, apart from cli.py.
 
-Both import their toolkit only when run: GTK and dbus-next are optional, and every
+Both import their toolkit only when run: GTK and dbus-fast are optional, and every
 other command must start without them.
 """
 

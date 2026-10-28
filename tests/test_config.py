@@ -40,6 +40,7 @@ def test_the_offer_is_short():
         "notify",
         "monitor_source",
         "mic_source",
+        "echo_cancel",
         "stt_backend",
         "stt_model",
         "stt_api_key",

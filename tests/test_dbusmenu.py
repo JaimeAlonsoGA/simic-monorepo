@@ -1,10 +1,10 @@
 """DBusMenu server + layout/property helpers — exercised without a live D-Bus connection."""
 
-from tests.fixtures import requires_dbus_next
+from tests.fixtures import requires_dbus
 
-pytestmark = requires_dbus_next
+pytestmark = requires_dbus
 
-from dbus_next import Variant  # noqa: E402
+from dbus_fast import Variant  # noqa: E402
 
 from simic._dbusmenu import DBusMenu, MenuItem, _item_properties, build_layout  # noqa: E402
 
@@ -60,7 +60,7 @@ def test_build_layout_propagates_property_filter():
 def _call(menu, name, *args):
     """Invoke a @method via its underlying function.
 
-    dbus-next's @method wrapper runs the body but swallows the return value on
+    dbus-fast's @method wrapper runs the body but swallows the return value on
     direct Python calls, so reach __wrapped__ to assert the protocol contract.
     """
     return getattr(menu, name).__wrapped__(menu, *args)
