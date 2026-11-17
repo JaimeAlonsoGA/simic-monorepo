@@ -17,11 +17,6 @@ on:
       - "scripts/arch-smoke.sh"
       - "tests/smoke/**"
       - ".github/workflows/arch-e2e.yml"
-  # Daily as well: the package resolves its dependencies when it is built, so a
-  # dependency release can break it with no commit here. PyAV 19 did, a week
-  # before 0.9.9 shipped with it.
-  schedule:
-    - cron: "17 4 * * *"
   workflow_dispatch:
 
 permissions:
