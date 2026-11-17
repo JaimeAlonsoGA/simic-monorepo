@@ -18,11 +18,6 @@ on:
       - "src/**"
       - "tests/smoke/**"
       - ".github/workflows/deb-e2e.yml"
-  # Daily as well: the venv takes the newest dependencies when it is built, so a
-  # dependency release can break it with no commit here. PyAV 19 did, a week
-  # before 0.9.9 shipped with it.
-  schedule:
-    - cron: "17 4 * * *"
   workflow_dispatch:
 
 permissions:
@@ -78,7 +73,7 @@ jobs:
         with:
           name: simic-debs
           path: dist/*.deb
-          retention-days: 7
+          retention-days: 1
 
   smoke:
     needs: build
